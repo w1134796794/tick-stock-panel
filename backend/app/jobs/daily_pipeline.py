@@ -758,6 +758,30 @@ def run_now(
             stage_errors.append(f"compute_mainline: {e}")
             skipped.append("mainline")
 
+    # Step 2.75: 原生情绪因子。输入严格来自 stock-panel 本地数据和已注册插件。
+    native_factor_rows = 0
+    native_context_rows = 0
+    try:
+        emit("compute_native_factors", 94, "计算原生情绪因子…")
+        from app.integrations.a_stock_sentiment import (
+            compute_native_factor_partitions, rebuild_native_leader_pool,
+        )
+
+        native_result = compute_native_factor_partitions(
+            repo.store.data_dir, start=today, end=today, repo=repo,
+        )
+        native_factor_rows = native_result.factor_rows
+        native_context_rows = native_result.context_rows
+        rebuild_native_leader_pool(repo.store.data_dir, today)
+        emit("compute_native_factors", 94, f"原生情绪因子 {native_factor_rows} 行")
+    except FileNotFoundError as e:
+        logger.info("compute_native_factors skipped: %s", e)
+        skipped.append("native_factors")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("compute_native_factors failed: %s", e)
+        stage_errors.append(f"compute_native_factors: {e}")
+        skipped.append("native_factors")
+
     # Step 2.8: 模拟盘结算: 顺延单按当日开盘/收盘撮合 → 除权调整 → 定版净值。
     # 幂等: 重跑同日不会重复成交/二次除权 (订单状态与 corp_action 台账守卫)。
     # 必须在日K/除权同步之后, 才能读到当日 raw OHLC 与因子。核心账务不受
@@ -817,6 +841,8 @@ def run_now(
         "minute_rows": written_minute,
         "regime_days": regime_days,
         "mainline_rows": mainline_rows,
+        "native_factor_rows": native_factor_rows,
+        "native_context_rows": native_context_rows,
         "paper_settle": paper_summary,
         "lagging_symbols": len(lagging_symbols),
         "enriched_total_days": enriched_total_days,

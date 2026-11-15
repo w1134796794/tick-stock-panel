@@ -43,6 +43,33 @@ def _engine() -> BacktestEngine:
     return BacktestEngine(repo=None)  # simulate_portfolio 不访问 repo
 
 
+def test_tiered_trailing_uses_drawdown_for_current_profit_stage():
+    panel = _panel(
+        ["A"],
+        days=4,
+        price=10.0,
+        overrides={
+            ("A", 1): {"open": 10.0, "high": 10.0, "low": 10.0, "close": 10.0},
+            ("A", 2): {"open": 10.8, "high": 12.0, "low": 10.8, "close": 11.8},
+            ("A", 3): {"open": 11.5, "high": 11.6, "low": 11.1, "close": 11.2},
+        },
+    )
+    result = _engine().simulate_portfolio(
+        panel,
+        _mask(panel, {("A", 0)}),
+        _mask(panel, set()),
+        MatcherConfig(
+            matching="open_t+1",
+            fees_pct=0,
+            slippage_bps=0,
+            tiered_trailing=((0.03, 0.02), (0.08, 0.04), (0.15, 0.06)),
+        ),
+    )
+
+    assert result.trades[0].exit_reason == "tiered_trailing"
+    assert result.trades[0].exit_price == 12.0 * (1 - 0.06)
+
+
 def test_max_exposure_sets_target_position_and_caps_count():
     panel = _panel(["A", "B", "C", "D"], days=3)
     entries = _mask(panel, {("A", 0), ("B", 0), ("C", 0), ("D", 0)})

@@ -136,6 +136,8 @@ class MatcherConfig:
     trailing_stop_pct: float | None = None
     trailing_take_profit_activate_pct: float | None = None
     trailing_take_profit_drawdown_pct: float | None = None
+    # (峰值收益激活门槛, 峰值回撤距离)，按门槛升序选择当前阶段。
+    tiered_trailing: tuple[tuple[float, float], ...] = ()
     max_hold_days: int | None = None
     max_positions: int = 10
     max_exposure_pct: float = 1.0
@@ -221,6 +223,24 @@ class SimulationOptions:
     include_trades: bool = True
     include_per_symbol_stats: bool = True
     include_return_distribution: bool = True
+
+
+def tiered_trailing_line(
+    tiers: tuple[tuple[float, float], ...] | list[tuple[float, float]] | None,
+    entry_price: float,
+    peak_price: float,
+) -> float | None:
+    """按峰值收益所处阶段返回保护价；未达到首个激活门槛时返回 None。"""
+    if not tiers or entry_price <= 0 or peak_price <= entry_price:
+        return None
+    peak_profit = peak_price / entry_price - 1.0
+    selected: float | None = None
+    for threshold, drawdown in sorted(tiers, key=lambda item: float(item[0])):
+        if peak_profit >= abs(float(threshold)):
+            selected = abs(float(drawdown))
+        else:
+            break
+    return peak_price * (1.0 - selected) if selected is not None else None
 
 
 def _resolve_signal_id(panel: pl.DataFrame, idx: int, signal_ids: list[str] | None) -> str | None:
@@ -904,6 +924,7 @@ class BacktestEngine:
             holding = False
             entry_idx = -1
             entry_price = 0.0
+            peak_price = 0.0
             hold_days = 0
 
             for i in range(len(sym_ent)):
@@ -912,9 +933,11 @@ class BacktestEngine:
                         holding = True
                         entry_idx = i
                         entry_price = float(sym_entry_prices[i])
+                        peak_price = entry_price
                         hold_days = 0
                 else:
                     hold_days += 1
+                    peak_price = max(peak_price, float(sym_close[i]))
                     exit_triggered = False
                     exit_reason = ""
 
@@ -924,6 +947,14 @@ class BacktestEngine:
                         if pnl <= -abs(config.stop_loss_pct):
                             exit_triggered = True
                             exit_reason = "stop_loss"
+
+                    if not exit_triggered:
+                        tiered_line = tiered_trailing_line(
+                            config.tiered_trailing, entry_price, peak_price
+                        )
+                        if tiered_line is not None and float(sym_close[i]) <= tiered_line:
+                            exit_triggered = True
+                            exit_reason = "tiered_trailing"
 
                     # 信号退出 (优先于 max_hold: 卖点信号是策略主动离场)
                     if not exit_triggered and sym_ext[i]:
@@ -1169,6 +1200,9 @@ class BacktestEngine:
             if activate is not None and drawdown is not None and peak_price > entry_price:
                 if peak_price / entry_price - 1 >= abs(float(activate)):
                     lines.append((peak_price * (1 - abs(float(drawdown))), "trailing_take_profit"))
+            tiered_line = tiered_trailing_line(config.tiered_trailing, entry_price, peak_price)
+            if tiered_line is not None:
+                lines.append((tiered_line, "tiered_trailing"))
             valid_lines = [(line, reason) for line, reason in lines if _valid_price(line)]
             if valid_lines:
                 stop_price, reason = max(valid_lines, key=lambda item: item[0])
@@ -1638,6 +1672,9 @@ class BacktestEngine:
                 if peak_profit >= abs(float(activate_pct)):
                     # 回撤止盈触发线: 相对峰值价回撤 drawdown 个点 (纯峰值口径)
                     risk_lines.append((peak_price * (1 - abs(float(drawdown_pct))), "trailing_take_profit"))
+            tiered_line = tiered_trailing_line(config.tiered_trailing, entry_price, peak_price)
+            if tiered_line is not None:
+                risk_lines.append((tiered_line, "tiered_trailing"))
 
             risk_lines = [(line, reason) for line, reason in risk_lines if _valid_price(line)]
             # 止损/移损/回撤止盈: 价格跌破风控线触发 (取最高优先级线)
@@ -2303,6 +2340,9 @@ class BacktestEngine:
                 if activate is not None and drawdown is not None and peak_price > entry_price:
                     if peak_price / entry_price - 1 >= abs(float(activate)):
                         risk_lines.append((peak_price * (1 - abs(float(drawdown))), "trailing_take_profit"))
+                tiered_line = tiered_trailing_line(config.tiered_trailing, entry_price, peak_price)
+                if tiered_line is not None:
+                    risk_lines.append((tiered_line, "tiered_trailing"))
                 valid_lines = [(line, reason) for line, reason in risk_lines if _valid_price(line)]
                 if valid_lines:
                     stop_price, reason = max(valid_lines, key=lambda item: item[0])
@@ -2933,6 +2973,9 @@ class BacktestEngine:
                         # 启动门槛用成本基准的浮盈率, 触发线用峰值基准, 与 trailing_stop 同口径
                         take_profit_line = peak_price * (1 - abs(float(drawdown_pct)))
                         risk_lines.append((take_profit_line, "trailing_take_profit"))
+                tiered_line = tiered_trailing_line(config.tiered_trailing, entry_price, peak_price)
+                if tiered_line is not None:
+                    risk_lines.append((tiered_line, "tiered_trailing"))
 
                 # 止损/移损/回撤止盈: 价格跌破风控线触发
                 risk_lines = [(line, reason) for line, reason in risk_lines if _valid_price(line)]

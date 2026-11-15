@@ -1,0 +1,1393 @@
+# ============================================
+# 因子注册表 — 所有因子的唯一定义
+# 每个因子有唯一ID，各Layer通过ID引用
+# 新增因子只需在此注册 + 在对应Layer配置中启用
+# ============================================
+
+factors:
+
+  # ==========================================
+  # A. 大盘环境类 (market_env)
+  # ==========================================
+
+  # --- 趋势子类 ---
+  multi_index_trend:
+    id: "multi_index_trend"
+    name: "多指数加权趋势评分"
+    category: "market_env"
+    sub_category: "trend"
+    description: "上证/深证/创业板/科创50/北证50 加权MA偏离度评分"
+    data_source: "index_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.40
+    enabled: true
+    params:
+      index_codes:
+        sh: "000001.SH"
+        sz: "399001.SZ"
+        cyb: "399006.SZ"
+        kcb: "000688.SH"
+        bj: "899050.BJ"
+      index_weights:
+        sh: 0.35
+        sz: 0.25
+        cyb: 0.20
+        kcb: 0.10
+        bj: 0.10
+      ma_short: 5
+      ma_mid: 20
+      ma_long: 60
+      bull_threshold: 0.01
+      bear_threshold: -0.01
+
+  A1_index_intraday_volatility:
+    id: "A1"
+    name: "指数日内振幅"
+    category: "market_env"
+    sub_category: "trend"
+    description: "指数(high-low)/pre_close，振幅大=分歧大，振幅小=一致性强"
+    data_source: "index_daily"
+    output_type: "float"
+    value_range: [0.0, 0.10]
+    default_weight: 0.15
+    enabled: true
+    params:
+      index_codes: ["000001.SH", "399001.SZ", "399006.SZ"]
+
+  A2_index_consecutive_direction:
+    id: "A2"
+    name: "指数连续涨跌方向"
+    category: "market_env"
+    sub_category: "trend"
+    description: "近N日pct_chg>0的天数占比，连阳=强势，连阴=弱势"
+    data_source: "index_daily"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.10
+    enabled: true
+    params:
+      lookback_days: 5
+      index_code: "000001.SH"
+
+  A3_style_deviation:
+    id: "A3"
+    name: "大小盘风格偏离度"
+    category: "market_env"
+    sub_category: "trend"
+    description: "上证50涨跌幅 - 中证1000涨跌幅，正值=大票强(防御)，负值=小票强(进攻)"
+    data_source: "index_daily"
+    output_type: "float"
+    value_range: [-0.05, 0.05]
+    default_weight: 0.10
+    enabled: true
+    params:
+      large_cap_index: "000016.SH"
+      small_cap_index: "000852.SH"
+
+  # --- 量能子类 ---
+  total_amount:
+    id: "total_amount"
+    name: "全市场成交额"
+    category: "market_env"
+    sub_category: "volume"
+    description: "全市场个股成交额汇总（亿）"
+    data_source: "all_stocks_daily"
+    output_type: "float"
+    value_range: [0.0, 50000.0]
+    default_weight: 0.50
+    enabled: true
+    params: {}
+  volume_ratio:
+    id: "volume_ratio"
+    name: "量比"
+    category: "market_env"
+    sub_category: "volume"
+    description: "当日成交额/5日均量"
+    data_source: "index_daily"
+    output_type: "float"
+    value_range: [0.3, 3.0]
+    default_weight: 0.30
+    enabled: true
+    params:
+      lookback_days: 5
+      expand_ratio: 1.2
+      shrink_ratio: 0.8
+
+  A4_amount_change_ratio:
+    id: "A4"
+    name: "成交额环比变化率"
+    category: "market_env"
+    sub_category: "volume"
+    description: "(今日成交额 - 昨日成交额) / 昨日成交额，放量/缩量速度"
+    data_source: "all_stocks_daily"
+    output_type: "float"
+    value_range: [-0.5, 0.5]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  # --- 宽度子类 ---
+  up_down_ratio:
+    id: "up_down_ratio"
+    name: "涨跌比"
+    category: "market_env"
+    sub_category: "width"
+    description: "上涨家数/总家数"
+    data_source: "all_stocks_daily"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.50
+    enabled: true
+    params:
+      strong_threshold: 0.70
+      normal_threshold: 0.40
+      weak_threshold: 0.20
+
+  A5_limit_down_count:
+    id: "A5"
+    name: "跌停家数"
+    category: "market_env"
+    sub_category: "width"
+    description: "按个股所属板块涨跌停幅度动态识别的跌停/接近跌停数量，恐慌程度度量"
+    data_source: "all_stocks_daily"
+    output_type: "int"
+    value_range: [0.0, 500.0]
+    default_weight: 0.25
+    enabled: true
+    params:
+      dynamic_price_limit: true
+
+  up_count:
+    id: "up_count"
+    name: "上涨家数"
+    category: "market_env"
+    sub_category: "width"
+    description: "全市场上涨股票数量"
+    data_source: "all_stocks_daily"
+    output_type: "int"
+    value_range: [0.0, 6000.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  # --- 连续性子类 ---
+  prev_limit_up_gap_up:
+    id: "prev_limit_up_gap_up"
+    name: "昨日涨停高开比例"
+    category: "market_env"
+    sub_category: "continuity"
+    description: "昨日涨停股今日开盘价>昨日收盘价的比例"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  prev_limit_up_positive:
+    id: "prev_limit_up_positive"
+    name: "昨日涨停收红比例"
+    category: "market_env"
+    sub_category: "continuity"
+    description: "昨日涨停股今日收盘价>昨日收盘价的比例"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  prev_first_board_gap_up:
+    id: "prev_first_board_gap_up"
+    name: "昨日首板高开比例"
+    category: "market_env"
+    sub_category: "continuity"
+    description: "昨日首板股今日高开比例"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  prev_first_board_positive:
+    id: "prev_first_board_positive"
+    name: "昨日首板收红比例"
+    category: "market_env"
+    sub_category: "continuity"
+    description: "昨日首板股今日收红比例"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  A6_blasted_next_day_performance:
+    id: "A6"
+    name: "炸板股次日表现"
+    category: "market_env"
+    sub_category: "continuity"
+    description: "昨日炸板股今日平均涨跌幅，反映市场容错率"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [-0.10, 0.10]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  # ==========================================
+  # B. 涨停情绪类 (emotion)
+  # ==========================================
+
+  limit_up_count:
+    id: "limit_up_count"
+    name: "涨停家数"
+    category: "emotion"
+    sub_category: "core"
+    description: "当日涨停股票数量"
+    data_source: "limit_up_pool"
+    output_type: "int"
+    value_range: [0.0, 300.0]
+    default_weight: 1.0
+    enabled: true
+    params:
+      high: 100
+      mid_high: 80
+      mid_low: 50
+      low: 30
+      freeze: 20
+
+  max_board_height:
+    id: "max_board_height"
+    name: "最高连板高度"
+    category: "emotion"
+    sub_category: "core"
+    description: "市场最高连板数"
+    data_source: "limit_up_pool"
+    output_type: "int"
+    value_range: [1.0, 20.0]
+    default_weight: 0.8
+    enabled: true
+    params:
+      boom: 7
+      high: 6
+      mid: 4
+      low: 3
+
+  broken_rate:
+    id: "broken_rate"
+    name: "炸板率"
+    category: "emotion"
+    sub_category: "core"
+    description: "炸板数/曾涨停数 (%)"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.6
+    enabled: true
+    params:
+      low: 15.0
+      mid: 25.0
+      high: 40.0
+
+  nuclear_button_count:
+    id: "nuclear_button_count"
+    name: "核按钮数量"
+    category: "emotion"
+    sub_category: "core"
+    description: "跌停家数"
+    data_source: "limit_up_pool"
+    output_type: "int"
+    value_range: [0.0, 200.0]
+    default_weight: 0.5
+    enabled: true
+    params:
+      low: 3
+      high: 10
+
+  prev_limit_up_premium:
+    id: "prev_limit_up_premium"
+    name: "昨日涨停溢价"
+    category: "emotion"
+    sub_category: "core"
+    description: "昨日涨停股今日开盘相对昨日收盘价的平均溢价(%)"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [-10.0, 20.0]
+    default_weight: 0.5
+    enabled: true
+    params:
+      high: 3.0
+      mid: 1.0
+      low: -1.0
+
+  mkt_profit_effect_score:
+    id: "mkt_profit_effect_score"
+    name: "市场赚钱效应"
+    category: "emotion"
+    sub_category: "core"
+    description: "综合市场赚钱宽度、昨日涨停溢价、连板持续性和涨停交易安全性的盘后评分"
+    data_source: "stock_daily_silver,limit_up_pool_silver,limit_down_pool_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params:
+      strong: 75.0
+      good: 60.0
+      divided: 45.0
+      weak: 30.0
+
+  mkt_promotion_trend_score:
+    id: "mkt_promotion_trend_score"
+    name: "连板接力趋势"
+    category: "emotion"
+    sub_category: "continuity"
+    description: "最近5个交易日一进二、二进三、三进四和四板以上高位晋级的小样本平滑趋势评分"
+    data_source: "limit_up_pool_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params:
+      lookback_days: 5
+      weights: [0.30, 0.30, 0.20, 0.20]
+
+  echelon_integrity:
+    id: "echelon_integrity"
+    name: "连板梯队完整性"
+    category: "emotion"
+    sub_category: "core"
+    description: "连板梯队递减比例的健康度评分"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.4
+    enabled: true
+    params:
+      ideal_ratios: [0.6, 0.4, 0.25, 0.15, 0.1]
+      min_ratio_threshold: 0.5
+
+  continuous_rate:
+    id: "continuous_rate"
+    name: "连板率"
+    category: "emotion"
+    sub_category: "core"
+    description: "连板股数(≥2板)/涨停股总数 (%)"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.6
+    enabled: true
+    params:
+      high: 30.0
+      mid: 20.0
+      low: 10.0
+
+  limit_down_ratio:
+    id: "limit_down_ratio"
+    name: "跌停/涨停比"
+    category: "emotion"
+    sub_category: "core"
+    description: "跌停家数/涨停家数"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 5.0]
+    default_weight: 0.7
+    enabled: true
+    params:
+      low: 0.1
+      mid: 0.3
+      high: 0.5
+
+  win_rate:
+    id: "win_rate"
+    name: "T+1胜率"
+    category: "emotion"
+    sub_category: "core"
+    description: "T+1开盘卖出胜率 (%)"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.5
+    enabled: true
+    params: {}
+
+  avg_profit:
+    id: "avg_profit"
+    name: "平均赢面"
+    category: "emotion"
+    sub_category: "core"
+    description: "盈利股票的平均收益率 (%)"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [-10.0, 20.0]
+    default_weight: 0.4
+    enabled: true
+    params: {}
+
+  # --- 新增情绪因子 ---
+  B1_first_board_ratio:
+    id: "B1"
+    name: "首板/连板比"
+    category: "emotion"
+    sub_category: "structure"
+    description: "首板数/连板数(≥2板)，比值高=低位试错多(新周期萌芽)，比值低=高位抱团"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 50.0]
+    default_weight: 0.08
+    enabled: true
+    params: {}
+
+  B2_one_word_board_ratio:
+    id: "B2"
+    name: "一字板占比"
+    category: "emotion"
+    sub_category: "extreme"
+    description: "一字涨停数/总涨停数，占比高=情绪极端一致，次日分歧风险大"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.05
+    enabled: true
+    params:
+      one_word_time: "09:25:00"
+
+  B3_tail_board_ratio:
+    id: "B3"
+    name: "尾盘板占比"
+    category: "emotion"
+    sub_category: "extreme"
+    description: "14:30后涨停数/总涨停数，占比高=偷鸡板多，资金不自信"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.05
+    enabled: true
+    params:
+      tail_time: "14:30:00"
+
+  B4_extreme_reversal_count:
+    id: "B4"
+    name: "地天板/天地板数量"
+    category: "emotion"
+    sub_category: "extreme"
+    description: "按个股所属板块涨跌停幅度识别的地天板/天地板数量，反映极端波动"
+    data_source: "all_stocks_daily"
+    output_type: "int"
+    value_range: [0.0, 50.0]
+    default_weight: 0.05
+    enabled: true
+    params:
+      dynamic_price_limit: true
+
+  B5_avg_seal_ratio:
+    id: "B5"
+    name: "涨停股平均封单比"
+    category: "emotion"
+    sub_category: "quality"
+    description: "封单金额/流通市值的均值，反映资金信心"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 0.5]
+    default_weight: 0.05
+    enabled: true
+    params: {}
+
+  # ==========================================
+  # C. 板块强度类 (sector)
+  # ==========================================
+
+  sector_pct_change:
+    id: "sector_pct_change"
+    name: "板块涨跌幅"
+    category: "sector"
+    sub_category: "momentum"
+    description: "板块指数当日涨跌幅(%)"
+    data_source: "ths_index"
+    output_type: "float"
+    value_range: [-10.0, 10.0]
+    default_weight: 0.30
+    enabled: true
+    params: {}
+
+  sector_amount:
+    id: "sector_amount"
+    name: "板块成交额"
+    category: "sector"
+    sub_category: "capital"
+    description: "板块成分股成交额汇总"
+    data_source: "ths_index"
+    output_type: "float"
+    value_range: [0.0, 1e12]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  sector_limit_up_count:
+    id: "sector_limit_up_count"
+    name: "板块涨停家数"
+    category: "sector"
+    sub_category: "emotion"
+    description: "板块内涨停股票数量"
+    data_source: "limit_up_pool"
+    output_type: "int"
+    value_range: [0.0, 50.0]
+    default_weight: 0.35
+    enabled: true
+    params: {}
+
+  sector_limit_up_ratio:
+    id: "sector_limit_up_ratio"
+    name: "板块涨停占比"
+    category: "sector"
+    sub_category: "emotion"
+    description: "涨停数/成分股数"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  sector_momentum:
+    id: "sector_momentum"
+    name: "板块动量得分"
+    category: "sector"
+    sub_category: "momentum"
+    description: "基于历史趋势的动量评分"
+    data_source: "ths_index"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  C1_avg_seal_time:
+    id: "C1"
+    name: "板块内涨停股平均封板时间"
+    category: "sector"
+    sub_category: "quality"
+    description: "板块涨停股首次封板时间均值，越早=进攻性越强"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 240.0]
+    default_weight: 0.10
+    enabled: true
+    params:
+      time_format: "minutes_since_open"
+
+  C2_leader_follower_seal_ratio:
+    id: "C2"
+    name: "龙头/跟风封单比"
+    category: "sector"
+    sub_category: "structure"
+    description: "龙头封单/跟风封单，比值大=龙头虹吸，比值小=板块合力强"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.08
+    enabled: true
+    params: {}
+
+  C3_sector_next_day_premium:
+    id: "C3"
+    name: "板块涨停股次日平均溢价"
+    category: "sector"
+    sub_category: "quality"
+    description: "板块昨日涨停股今日pct_chg均值，板块赚钱效应度量"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [-10.0, 10.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  C4_sector_net_capital_flow:
+    id: "C4"
+    name: "板块资金净流入"
+    category: "sector"
+    sub_category: "capital"
+    description: "板块成分股amount加权涨跌幅，量价配合度"
+    data_source: "all_stocks_daily"
+    output_type: "float"
+    value_range: [-1e10, 1e10]
+    default_weight: 0.08
+    enabled: true
+    params: {}
+
+  C5_sector_rotation_speed:
+    id: "C5"
+    name: "板块轮动速度"
+    category: "sector"
+    sub_category: "persistence"
+    description: "近5日热点板块更换率，轮动快=无主线，轮动慢=主线明确"
+    data_source: "persistence_history"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.08
+    enabled: true
+    params:
+      lookback_days: 5
+
+  # ==========================================
+  # D. 个股技术类 (stock_tech)
+  # ==========================================
+
+  # 逐股技术因子（Layer3 实际产出/展示，值域 0-100；compute_fn 见 core/factors/layer3_perstock.py）
+  D1_n_day_high_low:
+    id: "D1"
+    name: "N日高低位"
+    category: "stock_tech"
+    sub_category: "trend"
+    description: "当前价在近N日最高/最低之间的位置(0-100)"
+    data_source: "stock_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params:
+      lookback_days: 20
+
+  D2_vol_price_coord:
+    id: "D2"
+    name: "量价配合度"
+    category: "stock_tech"
+    sub_category: "volume"
+    description: "涨幅与量比的匹配程度(0-100)"
+    data_source: "stock_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  D3_seal_strength:
+    id: "D3"
+    name: "封板强度"
+    category: "stock_tech"
+    sub_category: "quality"
+    description: "由首次封板时间映射的封板强度评分(0-100)"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  D4_turnover_health:
+    id: "D4"
+    name: "换手率健康度"
+    category: "stock_tech"
+    sub_category: "quality"
+    description: "换手率是否处于合理区间(0-100)"
+    data_source: "stock_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  D5_ma_bull_align:
+    id: "D5"
+    name: "均线多头排列度"
+    category: "stock_tech"
+    sub_category: "size"
+    description: "MA5>MA10>MA20>MA60 与价在均线上的程度(0-100)"
+    data_source: "stock_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  # --- board 子类：打板身位（由 gold stock_factor_job 计算，仅对当日涨停票有意义）---
+  stk_board_height:
+    id: "D6"
+    name: "连板高度梯队分"
+    category: "stock_tech"
+    sub_category: "board"
+    description: "连板高度映射梯队分（非单调：二板加速最优，高位衰减）；非涨停=中性50"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.50
+    enabled: true
+    params: {}
+
+  stk_seal_time_quality:
+    id: "D7"
+    name: "封板时间质量分"
+    category: "stock_tech"
+    sub_category: "board"
+    description: "首次封板越早越强，炸板次数扣分；非涨停=中性50"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.30
+    enabled: true
+    params: {}
+
+  stk_float_mv_fit:
+    id: "D8"
+    name: "流通市值适配分"
+    category: "stock_tech"
+    sub_category: "board"
+    description: "流通市值区间打分，中小盘弹性更优，两端衰减；缺失=中性50"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  # ==========================================
+  # E. 资金流向类 (moneyflow)
+  # ==========================================
+
+  # 逐股资金流因子（Layer3 实际产出/展示；compute_fn 见 core/factors/layer3_perstock.py）
+  E1_main_net_ratio:
+    id: "E1"
+    name: "主力净流入占比"
+    category: "moneyflow"
+    sub_category: "moneyflow"
+    description: "(大单+特大单净额)/总成交 × 100"
+    data_source: "moneyflow_summary"
+    output_type: "float"
+    value_range: [-100.0, 100.0]
+    default_weight: 0.35
+    enabled: true
+    params: {}
+
+  E2_retail_net_ratio:
+    id: "E2"
+    name: "散户净流入占比"
+    category: "moneyflow"
+    sub_category: "moneyflow"
+    description: "(中单+小单净额)/总成交 × 100"
+    data_source: "moneyflow_summary"
+    output_type: "float"
+    value_range: [-100.0, 100.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  E3_large_buy_ratio:
+    id: "E3"
+    name: "大单买入占比"
+    category: "moneyflow"
+    sub_category: "moneyflow"
+    description: "(大单买+特大单买)/总成交 × 100"
+    data_source: "moneyflow_summary"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  E4_moneyflow_trend:
+    id: "E4"
+    name: "资金流向趋势"
+    category: "moneyflow"
+    sub_category: "moneyflow"
+    description: "近N日主力净流入为正的天数占比 × 100"
+    data_source: "moneyflow_summary"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  first_board_sector_resonance_ratio:
+    id: "FBM1"
+    name: "首板板块共振占比"
+    category: "emotion"
+    sub_category: "first_board"
+    description: "当日官方首板中，所属题材位于板块涨幅前20%的股票占比"
+    data_source: "limit_up_pool+sector_daily+sector_membership"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.0
+    enabled: true
+    params: {top_percentile: 0.20}
+
+  first_board_cluster_count:
+    id: "FBM2"
+    name: "首板集群板块数"
+    category: "emotion"
+    sub_category: "first_board"
+    description: "当日板块内至少出现3只官方首板的题材数量"
+    data_source: "limit_up_pool+sector_membership"
+    output_type: "int"
+    value_range: [0.0, 30.0]
+    default_weight: 0.0
+    enabled: true
+    params: {minimum_first_boards: 3}
+
+  first_board_follow_through_ratio:
+    id: "FBM3"
+    name: "首板题材延续率"
+    category: "emotion"
+    sub_category: "first_board"
+    description: "昨日出现官方首板的题材中，今日板块指数继续收红的比例"
+    data_source: "limit_up_pool+sector_daily+sector_membership"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_capital_flow_consensus:
+    id: "SIG1"
+    name: "多源资金流共识"
+    category: "moneyflow"
+    sub_category: "capital_flow"
+    description: "同花顺与东方财富资金净流向的候选池分位共识，T日盘后供T+1使用"
+    data_source: "stock_capital_flow_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.30
+    enabled: true
+    params: {}
+
+  stk_intraday_seal_quality:
+    id: "D9"
+    name: "封板综合质量"
+    category: "stock_tech"
+    sub_category: "board"
+    description: "综合首封时间、反复开板和封单成交额占比；仅使用当日涨停池客观字段"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.08
+    enabled: true
+    params: {}
+
+  stk_first_board_sector_sync_score:
+    id: "FB1"
+    name: "首板板块同步爆发"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "官方首板当天板块涨幅、涨停扩散、板块与个股成交额同步放大的综合评分"
+    data_source: "limit_up_pool+factor_sector_wide+stock_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_first_board_leadership_score:
+    id: "FB2"
+    name: "首板先锋领先性"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "按同题材官方首板的首封时间排序，越早封板越接近板块先锋"
+    data_source: "limit_up_pool+sector_membership"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_first_board_sector_pioneer_score:
+    id: "FB3"
+    name: "首板题材集群强度"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "所属题材首板数量及其占成分股比例，衡量低位启动集群强度"
+    data_source: "limit_up_pool+sector_membership"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_first_board_breadth_score:
+    id: "FB4"
+    name: "首板题材跟涨宽度"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "所属题材当日涨幅超过5%的成分股占比评分"
+    data_source: "stock_daily+sector_membership"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {member_pct_threshold: 5.0}
+
+  stk_first_board_amount_surge_score:
+    id: "FB5"
+    name: "首板量价共振"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "板块成交额环比与个股五日成交额比的同步放大质量"
+    data_source: "factor_sector_wide+stock_daily"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_first_board_new_theme_score:
+    id: "FB6"
+    name: "首板新题材启动"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "所属题材近5个交易日首板稀少时得分更高，识别首次启动而非反复炒作"
+    data_source: "factor_stock_wide+limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {lookback_days: 5}
+
+  stk_first_board_resonance_score:
+    id: "FB7"
+    name: "首板板块共振综合分"
+    category: "stock_tech"
+    sub_category: "first_board"
+    description: "汇总同步爆发、先锋领先、题材集群、跟涨宽度、量价共振和新题材启动"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_sector_rotation_momentum:
+    id: "D10"
+    name: "板块轮动动量"
+    category: "stock_tech"
+    sub_category: "sector"
+    description: "所属主板块动量、主线加速度和连续活跃天数的目标区间评分"
+    data_source: "factor_sector_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.08
+    enabled: true
+    params: {lookback_days: 6}
+
+  stk_crowding_decay_5d:
+    id: "D11"
+    name: "近5日拥挤衰减"
+    category: "stock_tech"
+    sub_category: "risk"
+    description: "按近5个交易日涨停出现次数评估接力拥挤，重复过多逐级降分"
+    data_source: "limit_up_pool"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.05
+    enabled: true
+    params: {lookback_days: 5}
+
+  stk_relative_strength_sector:
+    id: "D12"
+    name: "个股相对板块强度"
+    category: "stock_tech"
+    sub_category: "sector"
+    description: "当日个股涨幅相对所属主板块成分股中位数的横截面分位"
+    data_source: "stock_daily+sector_membership"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.07
+    enabled: true
+    params: {}
+
+  sec_behavior_attention:
+    id: "BH1"
+    name: "板块注意形成"
+    category: "behavior"
+    sub_category: "sector_state"
+    description: "板块首次转强、排名跃升、成交额异常和动量加速度的综合证据"
+    data_source: "sector_daily_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  sec_behavior_acceleration:
+    id: "BH2"
+    name: "板块一致加速"
+    category: "behavior"
+    sub_category: "sector_state"
+    description: "板块动量、持续性、合理量能和资金承接共同增强"
+    data_source: "factor_sector_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  sec_behavior_divergence:
+    id: "BH3"
+    name: "板块分歧释放"
+    category: "behavior"
+    sub_category: "sector_state"
+    description: "动量减速、排名回落、量能过热和资金承接走弱"
+    data_source: "factor_sector_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  sec_behavior_repair:
+    id: "BH4"
+    name: "板块弱转强修复"
+    category: "behavior"
+    sub_category: "sector_state"
+    description: "板块由弱转强、排名修复并获得量能和资金确认"
+    data_source: "factor_sector_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  sec_behavior_decay:
+    id: "BH5"
+    name: "板块拥挤衰退"
+    category: "behavior"
+    sub_category: "sector_state"
+    description: "高位持续后动量、排名、量能和资金同步衰减"
+    data_source: "factor_sector_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_behavior_attention:
+    id: "BH6"
+    name: "个股注意形成"
+    category: "behavior"
+    sub_category: "stock_state"
+    description: "板块注意扩散叠加个股相对强度、量能和市场身位"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_behavior_acceleration:
+    id: "BH7"
+    name: "个股一致加速"
+    category: "behavior"
+    sub_category: "stock_state"
+    description: "封板稳定、板块同步、相对强势且成交结构健康"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_behavior_divergence:
+    id: "BH8"
+    name: "个股分歧释放"
+    category: "behavior"
+    sub_category: "stock_state"
+    description: "炸板、量能过热、封板推迟和板块分歧的组合证据"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_behavior_repair:
+    id: "BH9"
+    name: "个股弱转强修复"
+    category: "behavior"
+    sub_category: "stock_state"
+    description: "低开修复、分歧承接、相对板块强度和量能确认"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_behavior_decay:
+    id: "BH10"
+    name: "个股拥挤衰退"
+    category: "behavior"
+    sub_category: "stock_state"
+    description: "重复涨停拥挤、封板推迟、相对强度和板块热度下降"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.0
+    enabled: true
+    params: {}
+
+  stk_capital_flow_persistence:
+    id: "SIG2"
+    name: "资金流持续性"
+    category: "moneyflow"
+    sub_category: "capital_flow"
+    description: "五日资金净流入的横截面分位评分"
+    data_source: "stock_capital_flow_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  stk_attention_consensus:
+    id: "SIG3"
+    name: "双平台热度共识"
+    category: "moneyflow"
+    sub_category: "attention"
+    description: "同花顺与东方财富热榜排名的交叉确认"
+    data_source: "stock_attention_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  stk_attention_crowding_risk:
+    id: "SIG4"
+    name: "热度拥挤风险"
+    category: "moneyflow"
+    sub_category: "attention"
+    description: "热度极高但资金流未确认时的追高风险"
+    data_source: "stock_attention_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  stk_kpl_leader_quality:
+    id: "SIG5"
+    name: "开盘啦龙头身份证据"
+    category: "moneyflow"
+    sub_category: "leader"
+    description: "仅明确龙头/核心标签或二板以上状态获得龙头身份加分，普通涨停和首板不等于龙头"
+    data_source: "stock_leader_signal_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  stk_mainline_leader_identity:
+    id: "SIG5B"
+    name: "主线龙头身份"
+    category: "stock_tech"
+    sub_category: "leader"
+    description: "取明确龙头/连板身份与5、10、20、60日趋势持续领先证据的较高值，用于排除强板块中的单日跟风股"
+    data_source: "factor_stock_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.18
+    enabled: true
+    params:
+      identity_threshold: 65
+
+  stk_margin_acceleration:
+    id: "SIG6"
+    name: "融资净买入加速度"
+    category: "moneyflow"
+    sub_category: "margin"
+    description: "融资净买入相较上一交易日的横截面变化，仅作轻权重增强"
+    data_source: "stock_margin_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.05
+    enabled: true
+    params: {}
+
+  stk_block_trade_risk:
+    id: "SIG7"
+    name: "大宗交易折价风险"
+    category: "moneyflow"
+    sub_category: "event_risk"
+    description: "大额折价大宗交易形成的次日风险惩罚"
+    data_source: "stock_event_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  sec_capital_flow_score:
+    id: "SIG8"
+    name: "板块资金流强度"
+    category: "sector"
+    sub_category: "capital_flow"
+    description: "同花顺板块净流入和涨幅的横截面强度"
+    data_source: "sector_capital_flow_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  sec_flow_price_resonance:
+    id: "SIG9"
+    name: "板块量价资金共振"
+    category: "sector"
+    sub_category: "capital_flow"
+    description: "板块价格方向与资金净流入方向的一致性"
+    data_source: "sector_capital_flow_silver"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  stk_lhb_net_buy_score:
+    id: "LHB1"
+    name: "龙虎榜净买入强度"
+    category: "moneyflow"
+    sub_category: "lhb"
+    description: "龙虎榜净买入额相对个股当日成交额的标准化评分"
+    data_source: "top_list"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.25
+    enabled: true
+    params: {}
+
+  stk_lhb_institution_score:
+    id: "LHB2"
+    name: "机构净买入强度"
+    category: "moneyflow"
+    sub_category: "lhb"
+    description: "机构专用席位净买入额相对个股成交额的标准化评分"
+    data_source: "top_inst"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  stk_lhb_institution_consensus:
+    id: "LHB3"
+    name: "机构席位共识"
+    category: "moneyflow"
+    sub_category: "lhb"
+    description: "机构买入席位与卖出席位的方向一致程度"
+    data_source: "top_inst"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  stk_lhb_repeat_persistence:
+    id: "LHB5"
+    name: "龙虎榜资金持续性"
+    category: "moneyflow"
+    sub_category: "lhb"
+    description: "近5个交易日上榜频率与净买入持续性的组合评分"
+    data_source: "top_list"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  stk_lhb_sector_resonance:
+    id: "LHB6"
+    name: "龙虎榜板块共振"
+    category: "moneyflow"
+    sub_category: "lhb"
+    description: "同概念或行业内上榜数量、净买入和机构方向的共振评分"
+    data_source: "factor_lhb_sector_wide"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.20
+    enabled: true
+    params: {}
+
+  stk_lhb_crowding_risk:
+    id: "LHB7"
+    name: "龙虎榜拥挤风险"
+    category: "moneyflow"
+    sub_category: "lhb"
+    description: "席位过度集中、高换手和重复上榜形成的接力风险惩罚"
+    data_source: "top_inst"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  # 市场级资金流因子（Layer4 跨周期使用，保留）
+  E3_north_flow:
+    id: "E3"
+    name: "北向资金净流入"
+    category: "moneyflow"
+    sub_category: "foreign"
+    description: "沪深股通当日净买入额(亿)"
+    data_source: "moneyflow_hsgt"
+    output_type: "float"
+    value_range: [-200.0, 200.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  E4_margin_change_ratio:
+    id: "E4"
+    name: "融资余额变化率"
+    category: "moneyflow"
+    sub_category: "leverage"
+    description: "(今日-昨日)/昨日，杠杆资金情绪"
+    data_source: "margin"
+    output_type: "float"
+    value_range: [-0.10, 0.10]
+    default_weight: 0.08
+    enabled: true
+    params: {}
+
+  # ==========================================
+  # F. 跨周期/衍生类 (cross_cycle)
+  # ==========================================
+
+  F1_cycle_duration:
+    id: "F1_cycle_duration"
+    name: "情绪周期持续性"
+    category: "cross_cycle"
+    sub_category: "cycle"
+    description: "当前周期已持续天数，高潮持续越久→退潮越近"
+    data_source: "emotion_history"
+    output_type: "int"
+    value_range: [1.0, 30.0]
+    default_weight: 0.10
+    enabled: true
+    params: {}
+
+  F2_market_emotion_divergence:
+    id: "F2_market_emotion_divergence"
+    name: "大盘-情绪背离度"
+    category: "cross_cycle"
+    sub_category: "divergence"
+    description: "|大盘评分 - 情绪评分|，背离越大越需警惕"
+    data_source: "composite"
+    output_type: "float"
+    value_range: [0.0, 100.0]
+    default_weight: 0.15
+    enabled: true
+    params: {}
+
+  F3_signal_win_rate:
+    id: "F3"
+    name: "昨日信号今日胜率"
+    category: "cross_cycle"
+    sub_category: "feedback"
+    description: "昨日发出的模式信号今日盈利比例，策略实时有效性反馈"
+    data_source: "pattern_signals"
+    output_type: "float"
+    value_range: [0.0, 1.0]
+    default_weight: 0.12
+    enabled: true
+    params: {}

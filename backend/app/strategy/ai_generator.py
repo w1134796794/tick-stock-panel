@@ -440,6 +440,12 @@ class AIStrategyGenerator:
         if backend in {"python_history_legacy", "minute_filter"}:
             return
         allowed = _MATRIX_SCORING_FIELDS if backend == "matrix_native" else _POLARS_SCORING_FIELDS
+        if backend != "matrix_native":
+            # 扩展表数值字段在运行时由 ext_factors 按交易日 PIT 注入；静态
+            # ENRICHED_COLUMNS 不包含这些动态列，校验时必须读取同一注册源。
+            from app.factors.ext_factors import numeric_timeseries_ext_columns
+
+            allowed = allowed | numeric_timeseries_ext_columns()
         unknown = sorted(set(scoring) - set(allowed))
         if unknown:
             raise ValueError(

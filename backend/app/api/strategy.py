@@ -226,6 +226,7 @@ def _strategy_detail(
         "trailing_stop": overrides.get("trailing_stop", getattr(s, "trailing_stop", None)) if overrides else getattr(s, "trailing_stop", None),
         "trailing_take_profit_activate": overrides.get("trailing_take_profit_activate", getattr(s, "trailing_take_profit_activate", None)) if overrides else getattr(s, "trailing_take_profit_activate", None),
         "trailing_take_profit_drawdown": overrides.get("trailing_take_profit_drawdown", getattr(s, "trailing_take_profit_drawdown", None)) if overrides else getattr(s, "trailing_take_profit_drawdown", None),
+        "tiered_trailing": [list(item) for item in getattr(s, "tiered_trailing", ())],
         "max_hold_days": overrides.get("max_hold_days", s.max_hold_days) if overrides else s.max_hold_days,
         "order_by": s.meta.get("order_by", "score"),
         "descending": s.meta.get("descending", True),
@@ -423,6 +424,52 @@ def run_strategy(req: RunRequest, request: Request):
     return _safe(asdict(result))
 
 
+def _run_all_with_unavailable(
+    engine,
+    context,
+    *,
+    strategy_ids: list[str],
+    params_map: dict,
+    overrides_map: dict,
+    as_of: date,
+) -> dict[str, dict]:
+    """Run a batch while isolating strategies whose evidence is unavailable."""
+    results: dict[str, dict] = {}
+    try:
+        batch_results = engine.run_all(
+            context,
+            params_map=params_map,
+            overrides_map=overrides_map,
+            strategy_ids=strategy_ids,
+        )
+    except ValueError:
+        # 扩展因子按证据可用性保持 fail-closed，但一个策略缺少可选数据源时
+        # 不应令批量策略接口整体 500。逐策略重试并显式标记不可用项。
+        batch_results = {}
+        for sid in strategy_ids:
+            try:
+                batch_results.update(
+                    engine.run_all(
+                        context,
+                        params_map=params_map,
+                        overrides_map=overrides_map,
+                        strategy_ids=[sid],
+                        parallel=False,
+                    )
+                )
+            except ValueError as exc:
+                results[sid] = {
+                    "total": 0,
+                    "as_of": str(as_of),
+                    "available": False,
+                    "error": str(exc),
+                }
+
+    for sid, result in batch_results.items():
+        results[sid] = {"total": result.total, "as_of": str(as_of)}
+    return results
+
+
 @router.post("/run-all")
 def run_all(req: RunAllRequest, request: Request):
     engine = _get_engine(request)
@@ -458,14 +505,15 @@ def run_all(req: RunAllRequest, request: Request):
         params_map=params_map,
         overrides_map={sid: all_overrides.get(sid, {}) for sid in strategy_ids},
     )
-    results: dict[str, dict] = {}
-    for sid, result in engine.run_all(
+    overrides_map = {sid: all_overrides.get(sid, {}) for sid in strategy_ids}
+    results = _run_all_with_unavailable(
+        engine,
         context,
-        params_map=params_map,
-        overrides_map={sid: all_overrides.get(sid, {}) for sid in strategy_ids},
         strategy_ids=strategy_ids,
-    ).items():
-        results[sid] = {"total": result.total, "as_of": str(as_of)}
+        params_map=params_map,
+        overrides_map=overrides_map,
+        as_of=as_of,
+    )
 
     return {"as_of": str(as_of), "results": results}
 

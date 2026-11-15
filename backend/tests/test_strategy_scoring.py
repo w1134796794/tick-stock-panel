@@ -40,6 +40,28 @@ def test_scoring_reweights_only_available_fields():
     assert scored["score"].to_list() == pytest.approx([100.0, 0.0])
 
 
+def test_scoring_excludes_unobserved_optional_enhancement_weight():
+    candidates = _candidates().with_columns(
+        pl.lit(None).cast(pl.Float64).alias("capital_flow")
+    )
+    scored = StrategyEngine._apply_scoring(
+        candidates,
+        {"vol_ratio_5d": 0.5, "capital_flow": 0.5},
+        optional_features=frozenset({"capital_flow"}),
+    )
+    backtest = StrategyBacktestService._apply_score(
+        candidates,
+        SimpleNamespace(
+            meta={"scoring": {"vol_ratio_5d": 0.5, "capital_flow": 0.5}},
+            optional_features=frozenset({"capital_flow"}),
+        ),
+        None,
+    )
+
+    assert scored["score"].to_list() == pytest.approx([100.0, 0.0])
+    assert backtest["score"].to_list() == pytest.approx([100.0, 0.0])
+
+
 def test_scoring_can_prefer_lower_factor_values():
     scored = StrategyEngine._apply_scoring(
         _candidates(),

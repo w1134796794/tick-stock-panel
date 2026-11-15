@@ -1398,6 +1398,7 @@ class StrategyBacktestService:
             0.005,
             0.5,
         )
+        tiered_trailing = tuple(getattr(s, "tiered_trailing", ()) or ())
         if (
             trailing_take_profit_activate is not None
             and trailing_take_profit_drawdown is not None
@@ -1425,6 +1426,7 @@ class StrategyBacktestService:
                 trailing_stop=trailing_stop,
                 trailing_take_profit_activate=trailing_take_profit_activate,
                 trailing_take_profit_drawdown=trailing_take_profit_drawdown,
+                tiered_trailing=tiered_trailing,
                 max_hold_days=max_hold_days,
                 score_min=score_min,
                 score_max=score_max,
@@ -1621,6 +1623,7 @@ class StrategyBacktestService:
             trailing_stop_pct=trailing_stop,
             trailing_take_profit_activate_pct=trailing_take_profit_activate,
             trailing_take_profit_drawdown_pct=trailing_take_profit_drawdown,
+            tiered_trailing=tiered_trailing,
             max_hold_days=max_hold_days,
             max_positions=config.max_positions,
             max_exposure_pct=config.max_exposure_pct,
@@ -2071,6 +2074,7 @@ class StrategyBacktestService:
             "trailing_stop": trailing_stop,
             "trailing_take_profit_activate": trailing_take_profit_activate,
             "trailing_take_profit_drawdown": trailing_take_profit_drawdown,
+            "tiered_trailing": tiered_trailing,
             "max_hold_days": max_hold_days,
             "full_horizon_days": full_horizon_days,
             "score_min": score_min,
@@ -2142,6 +2146,7 @@ class StrategyBacktestService:
         trailing_stop,
         trailing_take_profit_activate,
         trailing_take_profit_drawdown,
+        tiered_trailing,
         max_hold_days,
         score_min,
         score_max,
@@ -2291,6 +2296,7 @@ class StrategyBacktestService:
             trailing_stop_pct=trailing_stop,
             trailing_take_profit_activate_pct=trailing_take_profit_activate,
             trailing_take_profit_drawdown_pct=trailing_take_profit_drawdown,
+            tiered_trailing=tiered_trailing,
             max_hold_days=max_hold_days,
             max_positions=config.max_positions,
             max_exposure_pct=config.max_exposure_pct,
@@ -2387,6 +2393,7 @@ class StrategyBacktestService:
             "trailing_stop": trailing_stop,
             "trailing_take_profit_activate": trailing_take_profit_activate,
             "trailing_take_profit_drawdown": trailing_take_profit_drawdown,
+            "tiered_trailing": tiered_trailing,
             "max_hold_days": max_hold_days,
             "full_horizon_days": full_horizon_days,
             "score_min": score_min,
@@ -2643,6 +2650,7 @@ class StrategyBacktestService:
         panel = self._apply_score(
             panel, strategy, overrides, universe_mask=candidate, factor_snapshot=factor_snapshot,
         )
+        panel, candidate = self._apply_post_score(panel, candidate, strategy, params)
         entry = self._build_entry_mask_from_candidate(panel, candidate, strategy, entry_signals)
         overlay = StrategyEngine._effective_overlay(overrides)
         if overlay:
@@ -2713,6 +2721,41 @@ class StrategyBacktestService:
 
         # 没有策略候选层时, 由 entry_signals 直接决定买点。
         return true_mask
+
+    @staticmethod
+    def _apply_post_score(
+        panel: pl.DataFrame,
+        candidate_mask: pl.Series,
+        strategy: StrategyDef,
+        params: dict,
+    ) -> tuple[pl.DataFrame, pl.Series]:
+        """逐交易日执行评分后处理，并把新增审计列联回完整行情面板。"""
+        if strategy.post_score_fn is None or panel.is_empty():
+            return panel, candidate_mask
+        row_id = "__post_score_row"
+        indexed = panel.with_row_index(row_id)
+        candidates = indexed.filter(candidate_mask)
+        if candidates.is_empty():
+            return panel, candidate_mask
+        groups = (
+            candidates.partition_by("date", maintain_order=True)
+            if "date" in candidates.columns
+            else [candidates]
+        )
+        processed = [strategy.post_score_fn(group, params) for group in groups]
+        if any(not isinstance(frame, pl.DataFrame) for frame in processed):
+            raise TypeError("post_score must return a DataFrame")
+        kept = pl.concat(processed, how="diagonal_relaxed") if processed else candidates.head(0)
+        kept_ids = kept[row_id].to_list() if row_id in kept.columns else []
+        mask = indexed[row_id].is_in(kept_ids).alias("_candidate_filter")
+        added = [column for column in kept.columns if column not in indexed.columns]
+        if added:
+            indexed = indexed.join(
+                kept.select([row_id, *added]),
+                on=row_id,
+                how="left",
+            )
+        return indexed.drop(row_id), mask
 
     @staticmethod
     def _overlay_panel_mask(
@@ -3089,11 +3132,19 @@ class StrategyBacktestService:
             return df.drop(temporary) if temporary else df
 
         if scoring:
-            executable = [
-                (str(col), value, weight)
-                for col, weight in scoring.items()
-                if weight and (value := scoring_value_expr(work.columns, str(col))) is not None
-            ]
+            optional = getattr(s, "optional_features", frozenset()) or frozenset()
+            executable = []
+            for col, weight in scoring.items():
+                name = str(col)
+                value = scoring_value_expr(work.columns, name)
+                if not weight or value is None:
+                    continue
+                if name in optional and (
+                    work.is_empty()
+                    or not bool(work.select(value.is_not_null().any()).item())
+                ):
+                    continue
+                executable.append((name, value, weight))
             total_weight = sum(weight for _, _, weight in executable)
             if total_weight > 0:
                 score_parts: list[pl.Expr] = []

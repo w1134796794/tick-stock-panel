@@ -31,6 +31,7 @@ RISK_FIELDS = (
     "trailing_stop",
     "trailing_take_profit_activate",
     "trailing_take_profit_drawdown",
+    "tiered_trailing",
     "max_hold_days",
 )
 
@@ -50,6 +51,23 @@ def number(value, name: str, low: float, high: float) -> float:
     ):
         raise ValueError(f"{name} 必须在 {low} 至 {high} 之间")
     return float(value)
+
+
+def normalize_tiered_trailing(value) -> tuple[tuple[float, float], ...]:
+    if value in (None, (), []):
+        return ()
+    if not isinstance(value, (list, tuple)) or len(value) > 10:
+        raise ValueError("分段移动止盈必须是最多10组门槛/回撤")
+    tiers = []
+    for item in value:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            raise ValueError("分段移动止盈每组必须包含激活门槛和回撤")
+        threshold = number(item[0], "分段移动止盈激活门槛", 0.0, 5.0)
+        drawdown = number(item[1], "分段移动止盈回撤", 0.001, 0.5)
+        tiers.append((threshold, drawdown))
+    if len({threshold for threshold, _ in tiers}) != len(tiers):
+        raise ValueError("分段移动止盈激活门槛不能重复")
+    return tuple(sorted(tiers))
 
 
 def _params(strategy, raw: dict) -> dict:
@@ -108,6 +126,7 @@ def definition_revision(strategy) -> str:
                 for fn in (
                     strategy.filter_fn,
                     strategy.filter_history_fn,
+                    strategy.post_score_fn,
                     getattr(strategy.matrix_strategy, "compute_signals", None),
                 )
                 if fn is not None and hasattr(fn, "__code__")
@@ -181,6 +200,8 @@ def make_snapshot(data_dir: Path, engine, source: dict, account: dict | None = N
             value = value if isinstance(value, list) else list(getattr(s, key))
             if any(not isinstance(v, str) or not v for v in value):
                 raise ValueError("买卖信号必须是名称列表")
+        elif key == "tiered_trailing":
+            value = normalize_tiered_trailing(value)
         elif value is not None:
             lo, hi = {
                 "take_profit": (0.01, 5),

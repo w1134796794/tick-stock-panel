@@ -1,0 +1,134 @@
+screening_profiles:
+  default:
+    description: "默认短线候选：每日持续产出，市场分层只控制是否开仓；按候选池分位综合量能、板块主线、流动性与技术强度。"
+    candidate_source: factor_stock_wide
+    missing:
+      neutral_score: 50
+    hard_filters:
+      - name: "个股流动性合格"
+        factor: stk_liquidity_percentile
+        op: ">="
+        value: 35
+        reason: "成交额分位达到基础流动性要求"
+    priority_filters:
+      - priority: 1
+        name: "涨停强度确认"
+        factor: limit_progress
+        op: ">="
+        value: 0.95
+        min_keep: 8
+        max_drop_ratio: 0.75
+        reason: "当日涨幅接近对应板块涨停幅度"
+      - priority: 2
+        name: "趋势位置优先"
+        factor: stk_new_high_20d
+        op: ">="
+        value: 70
+        min_keep: 5
+        max_drop_ratio: 0.70
+        reason: "价格位置接近阶段强势区"
+    ranking:
+      candidate_percentile: true
+      # 冷启动先验。生产筛选优先加载 FACTOR_WEIGHT_DIR 中按生效日发布的 IC/IR 权重。
+      prior_weights:
+        tech_score: 0.15
+        stk_liquidity_percentile: 0.05
+        stk_new_high_20d: 0.10
+        stk_amount_ratio_5d: 0.12
+        stk_vol_ratio_5d: 0.03
+        stk_board_position: 0.07
+        stk_sector_mainline_score: 0.08
+        stk_sector_persistence_score: 0.04
+        stk_sector_resonance_score: 0.08
+        stk_intraday_seal_quality: 0.08
+        stk_sector_rotation_momentum: 0.08
+        stk_crowding_decay_5d: 0.05
+        stk_relative_strength_sector: 0.07
+      penalties:
+        - name: "成交额偏弱扣分"
+          factor: amount_ratio
+          below: 0.8
+          floor: 0.4
+          max_penalty: 10
+          reason: "涨停但成交额相对5日偏弱，次日承接风险升高"
+        - name: "成交额过热扣分"
+          factor: amount_ratio
+          above: 2.0
+          ceiling: 3.0
+          max_penalty: 15
+          reason: "成交额相对5日过热，次日兑现压力升高"
+      top_n: 10
+    lhb_enhancement:
+      enabled: true
+      max_total_adjustment: 8
+      max_crowding_penalty: 3
+      components:
+        net_buy: {max_bonus: 2.5, max_penalty: 3.0}
+        institution: {max_bonus: 2.5, max_penalty: 2.5}
+        institution_consensus: {max_bonus: 1.0, max_penalty: 1.0}
+        repeat_persistence: {max_bonus: 0.8, max_penalty: 0.8}
+        sector_resonance: {max_bonus: 2.0, max_penalty: 2.0}
+
+  momentum_repair:
+    description: "量价修复候选筛选：强调市场可进攻、量价修复和阶段新高位置。"
+    candidate_source: factor_stock_wide
+    missing:
+      neutral_score: 50
+    hard_filters:
+      - name: "市场允许进攻"
+        factor: mkt_market_score
+        op: ">="
+        value: 45
+        reason: "市场环境未进入明显防守"
+      - name: "流动性不能太弱"
+        factor: stk_liquidity_percentile
+        op: ">="
+        value: 40
+        reason: "量价修复需要足够承接"
+    priority_filters:
+      - priority: 1
+        name: "当日强度修复"
+        factor: stk_pct_chg_1d
+        op: ">="
+        value: 55
+        min_keep: 25
+        max_drop_ratio: 0.75
+        reason: "当日涨跌幅评分体现修复"
+      - priority: 2
+        name: "放量确认"
+        factor: stk_vol_ratio_5d
+        op: ">="
+        value: 50
+        min_keep: 15
+        max_drop_ratio: 0.70
+        reason: "成交量相对近 5 日均值有确认"
+      - priority: 3
+        name: "靠近强势区"
+        factor: stk_new_high_20d
+        op: ">="
+        value: 50
+        min_keep: 8
+        max_drop_ratio: 0.70
+        reason: "走势位置不能离强势区太远"
+    ranking:
+      # 冷启动先验；没有足够历史样本或关闭动态模式时使用。
+      prior_weights:
+        stk_pct_chg_1d: 0.25
+        stk_vol_ratio_5d: 0.10
+        stk_amount_ratio_5d: 0.10
+        stk_new_high_20d: 0.25
+        stk_liquidity_percentile: 0.30
+      penalties:
+        - name: "成交额极弱扣分"
+          factor: stk_amount_ratio_5d
+          below: 35
+          floor: 20
+          max_penalty: 4
+          reason: "量价修复缺少成交额确认，次日承接风险升高"
+        - name: "成交额过热扣分"
+          factor: amount_ratio
+          above: 3.2
+          ceiling: 5.0
+          max_penalty: 10
+          reason: "成交额相对5日过热，次日兑现压力升高"
+      top_n: 8

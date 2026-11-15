@@ -256,6 +256,22 @@ def test_validate_code_accepts_controlled_virtual_scoring_field():
     assert result["valid"] is True
 
 
+def test_validate_code_accepts_registered_timeseries_ext_scoring_field(monkeypatch):
+    from app.factors import ext_factors
+
+    field = "ext_demo_alpha"
+    monkeypatch.setattr(
+        ext_factors,
+        "numeric_timeseries_ext_columns",
+        lambda: frozenset({field}),
+    )
+    code = RAW_CODE.replace('"scoring": {},', f'"scoring": {{"{field}": 1.0}},')
+
+    result = AIStrategyGenerator().validate_code(code)
+
+    assert result["valid"] is True
+
+
 def test_validate_code_rejects_unknown_scoring_field():
     code = RAW_CODE.replace(
         '"scoring": {},',

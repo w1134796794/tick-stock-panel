@@ -888,6 +888,7 @@ def write_ext_parquet(
     snapshot_date: date | None = None,
     *,
     keep_strategy_cache: bool = False,
+    replace_existing: bool = False,
 ) -> int:
     """将 DataFrame 写入扩展数据 Parquet。
 
@@ -937,7 +938,7 @@ def write_ext_parquet(
     if tf and tf in df.columns and tf not in key:
         key.append(tf)
 
-    if out_path.exists():
+    if out_path.exists() and not replace_existing:
         existing = cast_df_to_schema(pl.read_parquet(out_path), config.fields)
         old_schema, new_schema = existing.schema, df.schema
         for name in old_schema.keys() & new_schema.keys():

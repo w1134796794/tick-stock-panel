@@ -203,6 +203,9 @@ class StrategyDef:
     lookback_days: int
     source: str  # "custom" | "ai" | "composite"
     required_features: frozenset[str] = field(default_factory=frozenset)
+    # 字段仍需存在于计算帧，但允许整列无观测值。典型用途是外部增强证据：
+    # 缺失时应记录证据缺口，不能阻断策略的本地必选条件与排序。
+    optional_features: frozenset[str] = field(default_factory=frozenset)
     file_path: Path | None = None
     execution_backend: str = "polars_expr"
     matrix_strategy: Any | None = None
@@ -217,6 +220,11 @@ class StrategyDef:
     # 模块 TAKE_PROFIT 常量（正收益比例, 如 0.10 = +10% 止盈）; 与 STOP_LOSS 对称,
     # 供回测/实盘风控读取（此前遗漏, 模块常量不生效）
     take_profit: float | None = None
+    # 可选评分后处理钩子: 接收已完成 score 计算、尚未排序截断的候选帧。
+    # 用于需要按综合分执行保底放宽等分阶段语义的自定义策略。
+    post_score_fn: Callable[[pl.DataFrame, dict], pl.DataFrame] | None = None
+    # 分段移动止盈: (峰值收益门槛, 峰值回撤) 按门槛升序。
+    tiered_trailing: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass
@@ -615,6 +623,22 @@ class StrategyEngine:
         elif filter_history_fn is None or filter_fn is not None:
             raise ValueError("python_history_legacy strategy must declare only filter_history")
 
+        raw_tiers = getattr(mod, "TIERED_TRAILING", ()) or ()
+        try:
+            tiered_trailing = tuple(sorted(
+                (float(item[0]), float(item[1])) for item in raw_tiers
+            ))
+        except (TypeError, ValueError, IndexError) as exc:
+            raise ValueError("TIERED_TRAILING must contain (threshold, drawdown) pairs") from exc
+        if any(
+            threshold < 0 or not 0 < drawdown <= 0.5
+            for threshold, drawdown in tiered_trailing
+        ) or len({threshold for threshold, _ in tiered_trailing}) != len(tiered_trailing):
+            raise ValueError("TIERED_TRAILING thresholds must be unique and drawdowns in (0, 0.5]")
+        post_score_fn = getattr(mod, "post_score", None)
+        if post_score_fn is not None and not callable(post_score_fn):
+            raise ValueError("post_score must be callable")
+
         return StrategyDef(
             meta=meta,
             basic_filter=bf,
@@ -629,6 +653,8 @@ class StrategyEngine:
             filter_fn=filter_fn,
             filter_history_fn=filter_history_fn,
             required_features=_resolve_required_features(meta, mod, filter_history_fn, path),
+            optional_features=frozenset(meta.get("optional_features", []) or [])
+            | frozenset(getattr(mod, "OPTIONAL_FEATURES", []) or []),
             lookback_days=int(getattr(mod, "LOOKBACK_DAYS", meta.get("lookback_days", 1)) or 1),
             source=source,
             file_path=path,
@@ -638,6 +664,8 @@ class StrategyEngine:
             filter_minute_history_fn=filter_minute_history_fn,
             minute_daily_bars=minute_daily_bars,
             scoring_columns=scoring_columns,
+            post_score_fn=post_score_fn,
+            tiered_trailing=tiered_trailing,
         )
 
     def reload(self) -> None:
@@ -1012,6 +1040,26 @@ class StrategyEngine:
             signal_df = signal_df.filter(pl.col("date") == as_of)
         if pool and not signal_df.is_empty():
             signal_df = signal_df.filter(pl.col("symbol").is_in(pool))
+        unavailable_ext = sorted(
+            field
+            for field in s.required_features - s.optional_features
+            if field.startswith("ext_")
+            and (
+                field not in signal_df.columns
+                or signal_df.is_empty()
+                or signal_df[field].null_count() == signal_df.height
+            )
+        )
+        if unavailable_ext:
+            preview = ", ".join(unavailable_ext[:5])
+            if len(unavailable_ext) > 5:
+                preview += f" 等 {len(unavailable_ext)} 个字段"
+            raise ValueError(
+                f"策略 {strategy_id} 在 {as_of} 缺少可用扩展因子值: "
+                + preview
+                + "；扩展时序数据按交易日精确对齐，请选择已有本地分区的日期，"
+                + "或先运行对应的本地计算器/数据源插件。"
+            )
         exit_signal_hits = self._collect_signal_hits(signal_df, exit_signals)
 
         # 普通策略只读目标日期；历史策略读取调用方注入的历史窗口。
@@ -1165,7 +1213,16 @@ class StrategyEngine:
                     df = df.filter(overlay_expr.fill_null(False))
 
         # Stage 3: 评分
-        df = self._apply_scoring(df, scoring, scoring_directions)
+        df = self._apply_scoring(
+            df,
+            scoring,
+            scoring_directions,
+            optional_features=s.optional_features,
+        )
+        if s.post_score_fn is not None:
+            df = s.post_score_fn(df, params)
+            if not isinstance(df, pl.DataFrame):
+                raise TypeError(f"strategy {strategy_id}: post_score must return a DataFrame")
         entry_signal_hits = self._collect_signal_hits(df, entry_signals)
         if not entry_signals and (
             s.filter_history_fn or s.filter_fn or s.execution_backend == "minute_filter"
@@ -1928,16 +1985,26 @@ class StrategyEngine:
         df: pl.DataFrame,
         weights: dict,
         directions: Mapping[str, str] | None = None,
+        optional_features: frozenset[str] | None = None,
     ) -> pl.DataFrame:
-        """通用评分: min-max 归一化 → 加权求和 → 0~100 分"""
+        """通用评分: min-max 归一化 → 可用权重归一 → 0~100 分。"""
         if not weights:
             return df
 
-        executable = [
-            (str(col), value, weight)
-            for col, weight in weights.items()
-            if weight and (value := scoring_value_expr(df.columns, str(col))) is not None
-        ]
+        optional = optional_features or frozenset()
+        executable = []
+        for col, weight in weights.items():
+            name = str(col)
+            value = scoring_value_expr(df.columns, name)
+            if not weight or value is None:
+                continue
+            if name in optional and (
+                df.is_empty()
+                or not bool(df.select(value.is_not_null().any()).item())
+            ):
+                # 可选增强源没有真实观测时从分母剔除；不能把缺失值按中性 50 分计入。
+                continue
+            executable.append((name, value, weight))
         total_weight = sum(weight for _, _, weight in executable)
         if total_weight <= 0:
             return df

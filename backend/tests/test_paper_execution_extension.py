@@ -460,6 +460,13 @@ def test_missing_signal_blocks_account_instead_of_silently_ignoring_it(env):
             10,
             None,
         ),
+        (
+            {"tiered_trailing": ((0.03, 0.02), (0.08, 0.04), (0.15, 0.06))},
+            10,
+            12,
+            11.2,
+            "tiered_trailing",
+        ),
     ],
 )
 def test_risk_thresholds(risk, entry, peak, price, expected):

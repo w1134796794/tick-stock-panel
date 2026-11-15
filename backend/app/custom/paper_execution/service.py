@@ -10,6 +10,7 @@ import threading
 from datetime import datetime, time
 from pathlib import Path
 
+from app.backtest.engine import tiered_trailing_line
 from app.market_time import CN_TZ, cn_now, in_continuous_session
 from app.services.fs_utils import atomic_write_text
 from app.strategy import paper, paper_auto
@@ -572,8 +573,14 @@ class ExecutionService:
             return
         risk = state["snapshot"]["overrides"]
         if not state["exits"] and not any(
-            risk.get(k) is not None
-            for k in ("stop_loss", "take_profit", "trailing_stop", "trailing_take_profit_activate")
+            risk.get(k) not in (None, (), [])
+            for k in (
+                "stop_loss",
+                "take_profit",
+                "trailing_stop",
+                "trailing_take_profit_activate",
+                "tiered_trailing",
+            )
         ):
             return
         status = self.quotes.status()
@@ -669,6 +676,9 @@ def risk_reason(risk: dict, entry: float, peak: float, price: float) -> str | No
     drawdown = risk.get("trailing_take_profit_drawdown")
     if activate is not None and drawdown is not None and peak / entry - 1 >= activate:
         lines.append((peak * (1 - drawdown), "trailing_take_profit"))
+    tiered_line = tiered_trailing_line(risk.get("tiered_trailing"), entry, peak)
+    if tiered_line is not None:
+        lines.append((tiered_line, "tiered_trailing"))
     if lines:
         threshold, reason = max(lines, key=lambda v: v[0])
         if price <= threshold:
