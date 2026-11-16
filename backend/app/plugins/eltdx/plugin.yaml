@@ -1,0 +1,19 @@
+# eltdx — Rust 驱动的通达信协议研究客户端。
+# 可选依赖；使用 `uv sync --extra eltdx` 或 Docker 的
+# `BACKEND_EXTRAS=eltdx` 安装。无 API Key，按模块与网络连通性工作。
+
+name: eltdx
+display_name: "eltdx"
+runtime: python
+entry: app.plugins.eltdx.provider:EltdxProvider
+check: app.plugins.eltdx.provider:availability
+datasets: [realtime, depth5, daily, minute, full_minute]
+description: "通达信协议研究数据源。提供全市场实时快照、五档盘口、原始日K、分钟K与全量分钟；除权因子和财务暂不注册。"
+install_hint: "可选依赖未安装时设置 BACKEND_EXTRAS=eltdx（可与 backtest 空格组合）后重建；可用 ELTDX_HOST / ELTDX_TIMEOUT_SECONDS 指定节点与超时。"
+homepage: "https://pypi.org/project/eltdx/"
+usage_notes:
+  - "无需 API Key；默认自动探测可用行情节点，也可通过 ELTDX_HOST 固定节点"
+  - "实时快照与五档盘口按 80 只批量拉取，价格/成交量/成交额按内部口径归一"
+  - "日K和分钟K均保存原始价；分钟时间统一为北京时间墙钟"
+  - "全量分钟使用批量 K 线接口；实际耗时取决于节点质量、网络与股票池规模"
+  - "仅注册已实现且可验证的能力；除权因子与财务继续由其他数据源提供"

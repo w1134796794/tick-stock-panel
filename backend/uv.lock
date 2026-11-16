@@ -450,6 +450,19 @@ wheels = [
 ]
 
 [[package]]
+name = "eltdx"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/ed/d28b09bc33829a43169af4ba8929b41da4f71e9fde04caccec7ca48e76a4/eltdx-3.3.0.tar.gz", hash = "sha256:16fad43e518618728a2ac5c0a5d0abf0a3bcce3ccb12daccec55d8fa912d9a9f", size = 1107611, upload-time = "2026-10-21T11:23:18.481Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/83/24378a1b67320b13061d9742b95494fb8963e4a46b492068378ab034af67/eltdx-3.3.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:566e4db3141a93d4167f67b420436619d017ec645c76842eb321c08f1a455b5b", size = 2162900, upload-time = "2026-10-21T11:23:09.146Z" },
+    { url = "https://files.pythonhosted.org/packages/99/68/3251e0431d3846f4ce9c86991c3587d59c9bb495dd737b9f1a1d1f3f4ce6/eltdx-3.3.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:c28dbe181233e9980d3e844c2cc826cf544c26814e3070f512be45cbd7a1e6a3", size = 2135155, upload-time = "2026-10-21T11:23:11.274Z" },
+    { url = "https://files.pythonhosted.org/packages/03/de/ed43ed429533959af39c4d2ad855f399967c28d163fc751d3f4fb243f72a/eltdx-3.3.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e74a1960903109b532dc31f5699909e888defe4c6a9da7710d77f8a24b20c9c9", size = 2233604, upload-time = "2026-10-21T11:23:12.963Z" },
+    { url = "https://files.pythonhosted.org/packages/51/14/ee551ced93553fd2020c841c8dd6eda0df9ba5807ee365b72be06b258432/eltdx-3.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:39183f191d583b0a53e9ee93750ca660616fc0645612f162f8cb408c79259a3a", size = 2253694, upload-time = "2026-10-21T11:23:15.021Z" },
+    { url = "https://files.pythonhosted.org/packages/09/f4/8ad9490dfe245929d785a0f5c8dce560a89db95707815f51984d8895e6f0/eltdx-3.3.0-cp310-abi3-win_amd64.whl", hash = "sha256:9f92575e3c17f55ac24b796b0c2ebfa88bba7025b07848ab3514f3f6494d6b7f", size = 2068503, upload-time = "2026-10-21T11:23:16.709Z" },
+]
+
+[[package]]
 name = "executing"
 version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2567,6 +2580,9 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "ruff" },
 ]
+eltdx = [
+    { name = "eltdx" },
+]
 legacy-cpu = [
     { name = "polars", extra = ["rtcompat"] },
 ]
@@ -2575,6 +2591,7 @@ legacy-cpu = [
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.10" },
     { name = "duckdb", specifier = ">=1.0" },
+    { name = "eltdx", marker = "extra == 'eltdx'", specifier = "==3.3.0" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fastexcel", specifier = ">=0.10" },
     { name = "httpx", specifier = ">=0.27" },
@@ -2608,7 +2625,7 @@ requires-dist = [
     { name = "vectorbt", marker = "extra == 'backtest'", specifier = ">=0.26" },
     { name = "winotify", marker = "sys_platform == 'win32'", specifier = ">=1.1" },
 ]
-provides-extras = ["legacy-cpu", "backtest", "desktop", "dev"]
+provides-extras = ["legacy-cpu", "backtest", "eltdx", "desktop", "dev"]
 
 [[package]]
 name = "tqdm"

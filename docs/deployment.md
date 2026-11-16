@@ -18,7 +18,7 @@ docker run -d --name tsp -p 3018:3018 -e DATA_DIR=/app/data -v "${PWD}/data:/app
 - 需要配置时:从 `.env.example` 复制出 `.env`,命令里加 `--env-file .env`,保留 `-e DATA_DIR=/app/data` 与数据挂载,避免旧镜像把 `DATA_DIR=./data` 解析到未挂载的 `/data`。
 - 自定义绝对数据路径会原样保留,需要把宿主机目录挂载到相同目标。Compose 用户需要同时调整 `environment` 和 `volumes`,仅修改 `.env` 不会覆盖 Compose 中明确指定的路径。
 - 自定义数据源等服务跑在宿主机、容器内需通过 `host.docker.internal` 访问时,Linux 的 `docker run` 要在命令里加 `--add-host=host.docker.internal:host-gateway`(Docker Desktop 的 macOS/Windows 默认已可解析;方式 B 的 compose 已在 `extra_hosts` 配好),否则报 `Name or service not known`。
-- 镜像默认不含 `legacy-cpu` / `backtest` extras —— 老 CPU(无 AVX2)或需要 vectorbt 回测时,请用方式 B 通过 `BACKEND_EXTRAS` 自构建。
+- 镜像默认不含 `legacy-cpu` / `backtest` / `eltdx` extras —— 老 CPU(无 AVX2)、需要 vectorbt 回测或启用 eltdx 数据源时,请用方式 B 通过 `BACKEND_EXTRAS` 自构建。eltdx 使用非商业研究许可,启用前需自行确认使用场景符合其许可与上游服务条款。
 - 跑自己改过的代码:fork 后到仓库 Actions 页启用 workflow(fork 默认禁用),构建出的 `ghcr.io/<你的用户名>/tick-stock-panel` 用法相同。
 - 想要 compose 全套挂载(`.env` / `tiers.yaml` / 数据卷):参考根目录 `docker-compose.yml`,把 `build:` 段换成 `image: ghcr.io/shy3130/tick-stock-panel:latest`。
 
@@ -102,9 +102,12 @@ cd frontend && pnpm install && pnpm dev   # http://localhost:3011
 ```ini
 BACKEND_EXTRAS=legacy-cpu          # 兼容老 CPU
 BACKEND_EXTRAS=legacy-cpu backtest # 兼容老 CPU + 回测依赖
+BACKEND_EXTRAS=backtest eltdx      # 回测 + eltdx 能力路由
 ```
 
 手动启动源码时，也可以在 `backend/` 目录直接执行 `uv sync --extra legacy-cpu`。不要设置 `POLARS_SKIP_CPU_CHECK`，它只会隐藏警告，实际执行不支持的指令时仍可能崩溃。
+
+eltdx 源码模式可执行 `uv sync --extra eltdx`。安装后重启应用,设置 → 数据源会出现 eltdx 卡片,并可独立路由日K、实时行情、分钟K、五档盘口与全量分钟。默认自动探测节点;需要固定节点时在 `.env` 设置 `ELTDX_HOST`,连接超时由 `ELTDX_TIMEOUT_SECONDS` 控制。
 
 ### 回测依赖说明
 

@@ -60,6 +60,13 @@ backtest = [
     "vectorbt>=0.26",
 ]
 
+# eltdx uses a native Rust wheel and a non-commercial research license, so it
+# remains an explicit opt-in instead of becoming a transitive dependency for
+# every desktop/server installation.
+eltdx = [
+    "eltdx==3.3.0",
+]
+
 # 桌面客户端依赖: pywebview 桌面窗口。打包用 (PyInstaller), 生产/Docker 不需要。
 # 启用:`uv sync --extra desktop`
 desktop = [
