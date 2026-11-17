@@ -8,8 +8,8 @@ startup.
 Implemented datasets:
   - realtime: full A-share snapshots in native batches
   - depth5: five-level books from the quote refresh endpoint
-  - daily: raw-price daily OHLCV
-  - minute: raw-price one-minute OHLCV
+  - daily: raw-price stock/index daily OHLCV
+  - minute: raw-price stock/index one-minute OHLCV
   - full_minute: current-day repair batches and small latest-bar batches
 
 Unit contract:
@@ -48,6 +48,7 @@ _BAR_BATCH = 75
 _PAGE_SIZE = 800
 _MAX_DAILY_BARS = 3000
 _MAX_MINUTE_BARS = 12_000
+_BAR_ASSET_TYPES = {"stock", "index"}
 
 _DAILY_SCHEMA = {
     "symbol": pl.String,
@@ -275,13 +276,17 @@ class EltdxProvider:
             return []
 
     def get_realtime_symbols(self, symbols: list[str], *, asset_type: str = "stock") -> list[dict] | None:
-        if asset_type != "stock" or not symbols:
+        if asset_type not in _BAR_ASSET_TYPES or not symbols:
             return []
         try:
             return self._realtime_for_native([_native_symbol(s) for s in symbols])
         except ProviderRequestError as exc:
             logger.warning("eltdx 订阅行情失败: %s", exc)
             return None
+
+    def get_realtime_indices(self, symbols: list[str]) -> list[dict] | None:
+        """补拉产品固定指数快照；结构与 realtime 数据集一致。"""
+        return self.get_realtime_symbols(symbols, asset_type="index")
 
     def _realtime_for_native(self, native: list[str]) -> list[dict]:
         out: list[dict] = []
@@ -321,10 +326,11 @@ class EltdxProvider:
         asset_type: str = "stock",
         on_chunk_done: Callable[[int, int], None] | None = None,
     ) -> Iterator[pl.DataFrame]:
-        if not symbols or asset_type != "stock":
+        if not symbols or asset_type not in _BAR_ASSET_TYPES:
             if on_chunk_done:
                 on_chunk_done(0, 0)
             return
+        kind_arg = {"kind": "index"} if asset_type == "index" else {}
         start_d = _wall_clock(start_time).date() if start_time else None
         end_d = _wall_clock(end_time).date() if end_time else datetime.now(_BEIJING).date()
         span = (end_d - start_d).days if start_d else _MAX_DAILY_BARS * 7 // 5
@@ -340,7 +346,7 @@ class EltdxProvider:
                 try:
                     result = client.bars.get(
                         native, period="day", start=start, count=page_count,
-                        adjust="none", batch_size=_BAR_BATCH,
+                        adjust="none", batch_size=_BAR_BATCH, **kind_arg,
                     )
                 except Exception as exc:
                     raise ProviderRequestError(f"eltdx 日K批次失败: {exc}") from exc
@@ -384,10 +390,11 @@ class EltdxProvider:
         freq: str = "1m",
         on_chunk_done: Callable[[int, int], None] | None = None,
     ) -> Iterator[pl.DataFrame]:
-        if not symbols or asset_type != "stock" or freq != "1m":
+        if not symbols or asset_type not in _BAR_ASSET_TYPES or freq != "1m":
             if on_chunk_done:
                 on_chunk_done(0, 0)
             return
+        kind_arg = {"kind": "index"} if asset_type == "index" else {}
         end_dt = _wall_clock(end_time) if end_time else datetime.now(_BEIJING).replace(tzinfo=None)
         start_dt = _wall_clock(start_time) if start_time else end_dt - timedelta(days=30)
         estimate = int(max((end_dt.date() - start_dt.date()).days, 1) * 5 / 7 * 240) + 480
@@ -401,7 +408,7 @@ class EltdxProvider:
                 try:
                     series = client.bars.get(
                         native, period="1min", start=start, count=count,
-                        adjust="none", bar_time="start",
+                        adjust="none", bar_time="start", **kind_arg,
                     )
                 except Exception as exc:
                     raise ProviderRequestError(f"eltdx 分钟K {symbol} 失败: {exc}") from exc

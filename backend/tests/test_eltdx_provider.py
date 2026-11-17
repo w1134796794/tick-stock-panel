@@ -30,8 +30,10 @@ def _snapshot():
 class _Bars:
     def __init__(self, stamp):
         self.stamp = stamp
+        self.calls = []
 
     def get(self, codes, **kwargs):
+        self.calls.append((codes, kwargs))
         requested = [codes] if isinstance(codes, str) else list(codes)
         series = {code: SimpleNamespace(bars=(_bar(self.stamp),)) for code in requested}
         return series[requested[0]] if isinstance(codes, str) else series
@@ -92,6 +94,19 @@ def test_realtime_maps_units_and_decimal_change():
     assert rows[0]["change_pct"] == pytest.approx(0.02)
 
 
+def test_realtime_indices_use_optional_index_supplement_protocol(monkeypatch):
+    provider = _provider()
+    requested = []
+    monkeypatch.setattr(
+        provider,
+        "_realtime_for_native",
+        lambda symbols: requested.extend(symbols) or [{"symbol": "000001.SH"}],
+    )
+
+    assert provider.get_realtime_indices(["000001.SH"]) == [{"symbol": "000001.SH"}]
+    assert requested == ["sh000001"]
+
+
 def test_daily_and_minute_use_beijing_naive_timestamps():
     stamp = datetime(2026, 11, 16, 15, 0, tzinfo=timezone(timedelta(hours=8)))
     provider = _provider(stamp)
@@ -106,6 +121,27 @@ def test_daily_and_minute_use_beijing_naive_timestamps():
     )
     assert minute.height == 1
     assert minute.row(0, named=True)["datetime"] == datetime(2026, 11, 16, 15, 0)
+
+
+def test_index_daily_and_minute_use_explicit_index_kind():
+    stamp = datetime(2026, 11, 16, 15, 0, tzinfo=timezone(timedelta(hours=8)))
+    provider = _provider(stamp)
+
+    daily = provider.get_daily(
+        ["000001.SH"], datetime(2026, 11, 1), datetime(2026, 11, 16, 23, 59),
+        asset_type="index",
+    )
+    minute = provider.get_minute(
+        ["000001.SH"], datetime(2026, 11, 16, 9, 30), datetime(2026, 11, 16, 15, 1),
+        asset_type="index",
+    )
+
+    assert daily.height == 1
+    assert minute.height == 1
+    assert {row["symbol"] for row in daily.to_dicts()} == {"000001.SH"}
+    assert {row["symbol"] for row in minute.to_dicts()} == {"000001.SH"}
+    assert provider._client.bars.calls
+    assert all(call[1]["kind"] == "index" for call in provider._client.bars.calls)
 
 
 def test_depth_and_full_minute_contracts():
