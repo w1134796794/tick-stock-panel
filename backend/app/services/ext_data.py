@@ -59,19 +59,35 @@ async def run_ext_data_io(func, *args, **kwargs):
 
 class ExtField:
     """扩展字段定义。"""
-    __slots__ = ("name", "dtype", "label")
+    __slots__ = ("dtype", "factor_group", "label", "name")
 
-    def __init__(self, name: str, dtype: str = "string", label: str = "") -> None:
+    def __init__(
+        self,
+        name: str,
+        dtype: str = "string",
+        label: str = "",
+        factor_group: str = "",
+    ) -> None:
         self.name = name
         self.dtype = dtype      # string | int | float | bool
         self.label = label or name
+        # 数值字段进入因子目录时的可选展示分组；空值沿用“扩展数据”。
+        self.factor_group = str(factor_group or "").strip()
 
     def to_dict(self) -> dict:
-        return {"name": self.name, "dtype": self.dtype, "label": self.label}
+        result = {"name": self.name, "dtype": self.dtype, "label": self.label}
+        if self.factor_group:
+            result["factor_group"] = self.factor_group
+        return result
 
     @classmethod
     def from_dict(cls, d: dict) -> ExtField:
-        return cls(d["name"], d.get("dtype", "string"), d.get("label", ""))
+        return cls(
+            d["name"],
+            d.get("dtype", "string"),
+            d.get("label", ""),
+            d.get("factor_group", ""),
+        )
 
 
 # 日期参数值的序列化格式 (date_format):

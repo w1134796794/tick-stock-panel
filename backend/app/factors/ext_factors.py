@@ -130,7 +130,7 @@ def ext_factor_specs(data_dir: Path | None = None) -> list[FactorSpec]:
             specs.append(FactorSpec(
                 id=fid,
                 label=f"{cfg.label}·{f.label}"[:32],
-                group="扩展数据",
+                group=f.factor_group or "扩展数据",
                 formula_text=(
                     f"扩展表「{cfg.label}」字段 {f.name} "
                     f"({'时序·按交易日对齐' if cfg.mode == 'timeseries' else '最新快照·仅当日帧'})"

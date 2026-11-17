@@ -4303,13 +4303,13 @@ export const api = {
   analysisMenuDelete: (id: string) =>
     request<{ status: string }>(`/api/analysis-menus/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
-  extDataCreate: (body: { id: string; label: string; mode: 'snapshot' | 'timeseries'; fields: { name: string; dtype: string; label: string }[]; description?: string; symbol_map?: Record<string, string>; code_map?: Record<string, string>; market_level?: boolean }) =>
+  extDataCreate: (body: { id: string; label: string; mode: 'snapshot' | 'timeseries'; fields: ExtDataField[]; description?: string; symbol_map?: Record<string, string>; code_map?: Record<string, string>; market_level?: boolean }) =>
     request<ExtDataConfig>('/api/ext-data', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
 
-  extDataUpdate: (id: string, body: { label?: string; fields?: { name: string; dtype: string; label: string }[]; description?: string; symbol_map?: Record<string, string>; code_map?: Record<string, string>; market_level?: boolean }) =>
+  extDataUpdate: (id: string, body: { label?: string; fields?: ExtDataField[]; description?: string; symbol_map?: Record<string, string>; code_map?: Record<string, string>; market_level?: boolean }) =>
     request<ExtDataConfig>(`/api/ext-data/${id}`, {
       method: 'PUT',
       body: JSON.stringify(body),
@@ -5379,6 +5379,8 @@ export interface ExtDataField {
   name: string
   dtype: string
   label: string
+  /** 数值字段进入因子目录时的展示分组；缺省归入“扩展数据” */
+  factor_group?: string
 }
 
 /** 拉取接口鉴权方式; Key 本体存 secrets_store, 不出现在配置里 */

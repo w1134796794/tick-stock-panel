@@ -534,7 +534,7 @@ def create_config(request: Request, body: CreateExtReq):
         id=body.id,
         label=body.label,
         mode=body.mode,
-        fields=[ExtField(f.name, f.dtype, f.label) for f in body.fields],
+        fields=[ExtField(f.name, f.dtype, f.label, f.factor_group) for f in body.fields],
         description=body.description,
         symbol_map=body.symbol_map,
         code_map=body.code_map,
@@ -558,7 +558,7 @@ def update_config(request: Request, config_id: str, body: UpdateExtReq):
     if body.label is not None:
         config.label = body.label
     if body.fields is not None:
-        config.fields = [ExtField(f.name, f.dtype, f.label) for f in body.fields]
+        config.fields = [ExtField(f.name, f.dtype, f.label, f.factor_group) for f in body.fields]
     if body.description is not None:
         config.description = body.description
     if body.symbol_map is not None:

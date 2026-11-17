@@ -5,21 +5,29 @@ from pathlib import Path
 
 import polars as pl
 
+from app.factors.ext_factors import ext_factor_specs
 from app.integrations.a_stock_sentiment.leader_pool import rebuild_native_leader_pool
 from app.integrations.a_stock_sentiment.native_pipeline import compute_native_factor_partitions
 from app.integrations.a_stock_sentiment.providers import register_provider, unregister_provider
 from app.integrations.a_stock_sentiment.registry import (
     CONFIG_ID,
+    FACTOR_GROUPS,
     STOCK_FACTOR_IDS,
     STRATEGY_CONTEXT_CONFIG_ID,
+    STRATEGY_CONTEXT_GROUPS,
     STRATEGY_CONTEXT_IDS,
 )
+from app.services.ext_data import ExtConfigStore
 
 
-def _local_data(root: Path, days: int = 65) -> date:
+def _local_data(root: Path, days: int = 65, symbol_count: int = 2) -> date:
     data = root / "data"
     start = date(2024, 1, 2)
-    symbols = ["000001.SZ", "600000.SH"]
+    symbols = (
+        ["000001.SZ", "600000.SH"]
+        if symbol_count == 2
+        else [f"{index:06d}.SZ" for index in range(1, symbol_count + 1)]
+    )
     for offset in range(days):
         d = start + timedelta(days=offset)
         rows = []
@@ -46,7 +54,11 @@ def _local_data(root: Path, days: int = 65) -> date:
     inst = data / "instruments" / "instruments.parquet"
     inst.parent.mkdir(parents=True)
     pl.DataFrame(
-        {"symbol": symbols, "name": ["平安银行", "浦发银行"], "float_shares": [1e9, 2e9]}
+        {
+            "symbol": symbols,
+            "name": [f"测试{index}" for index in range(len(symbols))],
+            "float_shares": [1e9 + index * 1e6 for index in range(len(symbols))],
+        }
     ).write_parquet(inst)
     return start + timedelta(days=days - 1)
 
@@ -74,6 +86,57 @@ def test_native_pipeline_registers_and_calculates_all_local_contracts(tmp_path: 
     assert factors["D5_ma_bull_align"].to_list() == [100.0, 100.0]
     assert factors["E1_main_net_ratio"].null_count() == 2  # 无插件不伪造
     assert context["stk_amount_ratio_5d"].null_count() == 0
+
+
+def test_native_factor_catalog_is_split_into_semantic_groups(tmp_path: Path) -> None:
+    last = _local_data(tmp_path)
+    data_dir = tmp_path / "data"
+    compute_native_factor_partitions(data_dir, start=last, end=last)
+    configs = {config.id: config for config in ExtConfigStore(data_dir).load_all()}
+
+    factor_fields = {field.name: field.factor_group for field in configs[CONFIG_ID].fields}
+    context_fields = {
+        field.name: field.factor_group
+        for field in configs[STRATEGY_CONTEXT_CONFIG_ID].fields
+    }
+    assert factor_fields == FACTOR_GROUPS
+    assert context_fields == STRATEGY_CONTEXT_GROUPS
+
+    native_specs = [
+        spec for spec in ext_factor_specs(data_dir)
+        if spec.id.startswith(f"ext_{CONFIG_ID}_")
+        or spec.id.startswith(f"ext_{STRATEGY_CONTEXT_CONFIG_ID}_")
+    ]
+    assert len(native_specs) == 62
+    assert {spec.group for spec in native_specs} == {
+        "扩展·技术量价",
+        "扩展·涨停与接力",
+        "扩展·板块与主线",
+        "扩展·资金流与交易",
+        "扩展·情绪与行为",
+        "扩展·龙虎榜与龙头",
+        "扩展·市场环境",
+    }
+    assert all(spec.group != "扩展数据" for spec in native_specs)
+
+
+def test_native_factor_frame_handles_late_float_after_null_inference_window(
+    tmp_path: Path,
+) -> None:
+    """线上回归：前100只缺流通股本、后续才出现小数值时不得推断成 Null 列。"""
+    last = _local_data(tmp_path, symbol_count=101)
+    instruments = tmp_path / "data" / "instruments" / "instruments.parquet"
+    pl.read_parquet(instruments).tail(1).write_parquet(instruments)
+
+    result = compute_native_factor_partitions(tmp_path / "data", start=last, end=last)
+
+    assert result.factor_rows == 101
+    factors = pl.read_parquet(
+        tmp_path / "data" / "ext_data" / CONFIG_ID
+        / "timeseries" / f"date={last}" / "part.parquet"
+    )
+    assert factors["stk_float_mv_fit"].null_count() == 100
+    assert factors["stk_float_mv_fit"].drop_nulls().dtype == pl.Float64
 
 
 def test_native_moneyflow_provider_overrides_only_real_fields(tmp_path: Path) -> None:
@@ -138,3 +201,8 @@ def test_leader_pool_uses_prior_sessions_only(tmp_path: Path) -> None:
         / "part.parquet"
     )
     assert pool.sort("symbol")["eligible"].to_list() == [1.0, 0.0]
+    pool_spec = next(
+        spec for spec in ext_factor_specs(tmp_path / "data")
+        if spec.id == "ext_a_stock_sentiment_leader_pool_eligible"
+    )
+    assert pool_spec.group == "扩展·龙虎榜与龙头"

@@ -16,7 +16,12 @@ from app.services.ext_data import (
     write_ext_parquet,
 )
 
-from .registry import CONFIG_ID, LEADER_POOL_CONFIG_ID, STRATEGY_CONTEXT_CONFIG_ID
+from .registry import (
+    CONFIG_ID,
+    GROUP_LEADER,
+    LEADER_POOL_CONFIG_ID,
+    STRATEGY_CONTEXT_CONFIG_ID,
+)
 
 LEADER_POOL_FIELD = "eligible"
 
@@ -28,7 +33,14 @@ def _config(data_dir: Path) -> ExtConfig:
         id=LEADER_POOL_CONFIG_ID,
         label="本地历史龙头池",
         mode="timeseries",
-        fields=[ExtField(LEADER_POOL_FIELD, "float", "前20交易日历史龙头资格")],
+        fields=[
+            ExtField(
+                LEADER_POOL_FIELD,
+                "float",
+                "前20交易日历史龙头资格",
+                factor_group=GROUP_LEADER,
+            )
+        ],
         description="由 stock-panel 本地因子与交易日历滚动计算；目标日只使用此前20个交易日。",
         symbol_map={"type": "computed", "from": "code", "method": "append_exchange"},
         code_map={"type": "mapped", "col": "code"},

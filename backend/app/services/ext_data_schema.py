@@ -10,6 +10,7 @@ class FieldDef(BaseModel):
     name: str
     dtype: str = "string"        # string | int | float | bool
     label: str = ""
+    factor_group: str = Field("", max_length=32)
 
 
 

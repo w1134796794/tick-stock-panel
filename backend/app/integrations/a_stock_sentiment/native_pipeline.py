@@ -771,7 +771,17 @@ def _calculate_date(
                 "stk_block_trade_risk": None,
             }
         )
-    factors = pl.DataFrame(rows)
+    # 全市场行数远超 Polars 默认的前 100 行推断窗口。部分可选依赖（如流通
+    # 股本、分钟封板证据）可能恰好前 100 行全为空、后续才出现小数；依赖推断
+    # 会把该列定成 Null/I64 并在追加首个 Float64 时中止整条盘后流水线。
+    factors = pl.DataFrame(
+        rows,
+        schema_overrides={
+            "code": pl.Utf8,
+            "symbol": pl.Utf8,
+            **dict.fromkeys(STOCK_FACTOR_IDS, pl.Float64),
+        },
+    )
     # 本地缓存龙虎榜是真实插件数据；其余增强源可通过 providers.register_provider 接入。
     for plugin in (
         _lhb_frame(data_dir, trade_date),
