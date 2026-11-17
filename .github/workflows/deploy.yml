@@ -1,0 +1,78 @@
+name: Deploy to Aliyun
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tick-stock-panel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      REPO_URL: https://github.com/${{ github.repository }}.git
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_KEY }}
+          SSH_HOST: ${{ secrets.ALIYUN_HOST }}
+          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy verified commit
+        env:
+          SSH_HOST: ${{ secrets.ALIYUN_HOST }}
+          SSH_USER: ${{ secrets.ALIYUN_USER }}
+          SSH_PORT: ${{ secrets.ALIYUN_SSH_PORT || '22' }}
+          APP_DIR: ${{ secrets.ALIYUN_APP_DIR }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' DEPLOY_SHA='$DEPLOY_SHA' REPO_URL='$REPO_URL' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          cd "$APP_DIR"
+          test -d .git
+          test -f .env
+          docker compose version >/dev/null
+
+          git config --global --add safe.directory "$APP_DIR"
+          git remote set-url origin "$REPO_URL"
+          git fetch --prune origin main
+          git reset --hard "$DEPLOY_SHA"
+
+          docker compose up -d --build --remove-orphans
+
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3018/ >/dev/null; then
+              echo "Deployment healthy at $DEPLOY_SHA"
+              docker compose ps
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Deployment health check failed"
+          docker compose ps
+          docker compose logs --tail=200 app
+          exit 1
+          REMOTE
