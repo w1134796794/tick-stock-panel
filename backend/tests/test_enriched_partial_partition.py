@@ -26,11 +26,14 @@ def _write_partition(base: Path, day: str, symbols: list[str]) -> None:
     part.mkdir(parents=True, exist_ok=True)
     pl.DataFrame({
         "symbol": symbols,
+        "date": [date.fromisoformat(day)] * len(symbols),
         "open": [1.0] * len(symbols),
         "high": [1.0] * len(symbols),
+        "low": [1.0] * len(symbols),
         "close": [1.0] * len(symbols),
         "volume": [100.0] * len(symbols),
         "amount": [100.0] * len(symbols),
+        "consecutive_limit_ups": [0] * len(symbols),
     }).write_parquet(
         part / "part.parquet"
     )
