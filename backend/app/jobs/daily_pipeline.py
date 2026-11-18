@@ -1470,6 +1470,23 @@ def start_scheduler(repo: KlineRepository, capset: CapabilitySet) -> AsyncIOSche
         logger.info("scheduled_review enabled @%02d:%02d mon-fri",
                     review_sched["hour"], review_sched["minute"])
 
+    if settings.auction_feishu_push_enabled:
+        from app.jobs.auction_push import push_auction_benchmark
+
+        scheduler.add_job(
+            push_auction_benchmark,
+            args=[repo.store.data_dir],
+            trigger=CronTrigger(
+                day_of_week="mon-fri", hour=9, minute="26-29", timezone="Asia/Shanghai",
+            ),
+            id="auction_feishu_push",
+            misfire_grace_time=30,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+        logger.info("竞价榜单飞书推送已启用，北京时间 09:26–09:29")
+
     scheduler.start()
     logger.info("scheduler started; instruments@%02d:%02d, pipeline@%02d:%02d, depth@%02d:%02d mon-fri",
                 inst_sched["hour"], inst_sched["minute"], sched["hour"], sched["minute"],

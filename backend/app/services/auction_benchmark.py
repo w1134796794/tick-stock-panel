@@ -109,6 +109,22 @@ def _raw_items(data: dict) -> list[dict]:
     return [r for r in items if isinstance(r, dict)] if isinstance(items, list) else []
 
 
+def fetch_exact_auction_items(trade_date: date_cls) -> list[dict]:
+    """盘前推送只接受源明确标记为目标交易日的榜单，不做本地日期回退。"""
+    from app.plugins.fuyao.client import FuyaoError
+
+    provider = _provider()
+    if provider is None:
+        return []
+    day = trade_date.isoformat()
+    try:
+        data = provider.short_term_benchmark(day)
+    except FuyaoError:
+        logger.info("竞价榜单尚不可用: %s", day)
+        return []
+    return _raw_items(data) if data.get("date") == day else []
+
+
 def _read_kline_closes(data_dir: Path, d: date_cls) -> dict[str, float]:
     """某交易日全市场 {symbol: close}; 无分区/读失败返回空。"""
     root = data_dir / "kline_daily" / f"date={d.isoformat()}"

@@ -166,6 +166,8 @@ class Settings(BaseSettings):
     # TickFlow
     tickflow_api_key: str = Field(default="", description="留空启用 free 模式")
 
+    auction_feishu_push_enabled: bool = False
+
     # AI
     ai_provider: str = "openai_compat"
     # OpenAI 系请求协议: chat_completions (兼容面最广) | responses (OpenAI 官方新协议)。
