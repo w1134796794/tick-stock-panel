@@ -733,15 +733,7 @@ export function MiningWorkbench() {
                 <div key={group}>
                   <div className="mb-1 text-[9px] font-medium text-muted">{group}</div>
                   <div className="grid grid-cols-2 gap-1">
-                    {items.map(item => {
-                      const label = item.label.replace(/^A股情绪(?:原生因子|策略上下文)·/, '')
-                      return (
-                        <label key={item.id} className="flex min-w-0 cursor-pointer items-center gap-1.5 text-[9px] text-secondary">
-                          <input type="checkbox" className="h-3 w-3 accent-accent" checked={draft.factorNames.includes(item.id)} onChange={() => toggleFactor(item.id)} />
-                          <span className="truncate" title={`${label} · ${item.desc}`}>{definitionOptionLabel({ ...item, label })}</span>
-                        </label>
-                      )
-                    })}
+                    {items.map(item => <label key={item.id} className="flex min-w-0 cursor-pointer items-center gap-1.5 text-[9px] text-secondary"><input type="checkbox" className="h-3 w-3 accent-accent" checked={draft.factorNames.includes(item.id)} onChange={() => toggleFactor(item.id)} /><span className="truncate" title={`${item.label} · ${item.desc}`}>{definitionOptionLabel(item)}</span></label>)}
                   </div>
                 </div>
               ))}

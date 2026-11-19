@@ -102,11 +102,12 @@ def test_numeric_only_specs(data_dir):
 
 def test_numeric_specs_use_optional_field_group(data_dir):
     _mk_config(data_dir, fields=[
-        ExtField(name="hot", dtype="float", factor_group="扩展·情绪与行为"),
+        ExtField(name="hot", dtype="float", label="热度", factor_group="扩展·情绪与行为"),
         ExtField(name="cnt", dtype="int"),
     ])
     specs = {spec.id: spec for spec in ext_factors.ext_factor_specs(data_dir)}
     assert specs["ext_tags_hot"].group == "扩展·情绪与行为"
+    assert specs["ext_tags_hot"].label == "题材标签·热度"
     assert specs["ext_tags_cnt"].group == "扩展数据"
 
 

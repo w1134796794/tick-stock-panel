@@ -40,6 +40,10 @@ EXT_PREFIX = "ext_"
 _NUMERIC_DTYPES = frozenset({"int", "float"})
 # 信号通道支持的 dtype: 数值 (Float64) + 字符串 (Utf8, contains/==/!=)
 _SIGNAL_DTYPES = _NUMERIC_DTYPES | {"string"}
+_UNPREFIXED_FACTOR_TABLES = frozenset({
+    "a_stock_sentiment_factors",
+    "a_stock_sentiment_strategy_context",
+})
 
 # 帧缓存: (data_dir, config_id, mode) -> (目录/分区签名, DataFrame)
 _frame_cache: dict[tuple[str, str, str], tuple[tuple, pl.DataFrame]] = {}
@@ -127,9 +131,11 @@ def ext_factor_specs(data_dir: Path | None = None) -> list[FactorSpec]:
             fid = ext_column_name(cfg.id, f.name)
             if not fid.isascii():
                 continue
+            field_label = f.label or f.name
+            label = field_label if cfg.id in _UNPREFIXED_FACTOR_TABLES else f"{cfg.label}·{f.label}"
             specs.append(FactorSpec(
                 id=fid,
-                label=f"{cfg.label}·{f.label}"[:32],
+                label=label[:32],
                 group=f.factor_group or "扩展数据",
                 formula_text=(
                     f"扩展表「{cfg.label}」字段 {f.name} "

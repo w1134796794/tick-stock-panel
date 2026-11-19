@@ -108,6 +108,11 @@ def test_native_factor_catalog_is_split_into_semantic_groups(tmp_path: Path) -> 
         or spec.id.startswith(f"ext_{STRATEGY_CONTEXT_CONFIG_ID}_")
     ]
     assert len(native_specs) == 62
+    assert {spec.id: spec.label for spec in native_specs} == {
+        f"ext_{table_id}_{field.name}": field.label
+        for table_id in (CONFIG_ID, STRATEGY_CONTEXT_CONFIG_ID)
+        for field in configs[table_id].fields
+    }
     assert {spec.group for spec in native_specs} == {
         "扩展·技术量价",
         "扩展·涨停与接力",
